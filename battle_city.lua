@@ -2,20 +2,26 @@
 -- author: Isshiki
 -- desc:   A mini remake of Battle City in Lua and TIC-80
 -- script: lua
+-- credits: BearThorne for autopiloting and collision detection
 
--- perhaps I need a material class?
+-- system
 local function mapType(x, y)
     if mget(x, y) == 33+0 then return 1 end -- brick
     if mget(x, y) == 33+1 then return 2 end -- iron
     if mget(x, y) == 33+2 then return 3 end -- bush
     if mget(x, y) == 33+3 then return 4 end -- water
+    if mget(x, y) == 33+4 then return 5 end -- bullet
 end
 
 local function isSolid(x,y)
     return mapType(x,y)~=2
 end
 
-local function newBullet(x,y)
+local function hitByBullet(x,y)
+    return mapType(x,y)==5
+end
+
+local function newBullet(x,y,direction)
     return {
         x=x,
         y=y,
@@ -40,10 +46,11 @@ local function newTank(model)
         y,
         vx=0,
         vy=0,
+        movement=Game.movement_patterns[math.random(1,4)],
         -- shooting_range=10,
         size=16, --both length or width
         shoot = function(self)
-            newBullet(self.x,self.y)
+            newBullet(self.x,self.y,self.direction)
         end,
         rotate=function(self)
             return true
@@ -58,7 +65,8 @@ end
 
 local function newEnemy (model)
     local enemy = newTank(model)
-    enemy.create_location_x = {22,28}
+    enemy.create_location_x=math.random(22,28)
+    enemy.create_location_y=0 -- somewhere around the top right corner
     enemy.vx=1
     enemy.vy=1
     enemy.autopilot = function(self)
@@ -106,10 +114,28 @@ local function newStage(stage_number)
         results={0,0,0,0,0}, -- number of model 1, 2, 3, 4 and sum
         points=0,
         timer=0,
+        enemy_container={},
         enemy_created=0,
         enemy_left=Game.enemy_number[stage_number],
         enemy=Game.enemy_number[stage_number], --number of rivals for each stage
     }
+end
+
+local function enemy_updater(stage)
+    for id,enemy in pairs(stage.enemy_container) do
+
+        local temp_x=enemy.x+enemy.movement.x --next move
+        local temp_y=enemy.x+enemy.movement.y
+
+        if isSolid(temp_x,temp_y) then
+            enemy.movement=Game.movement_patterns[math.random(1,4)]
+        else enemy.x=temp_x;enemy.y=temp_y end
+
+        if hitByBullet(enemy.x,enemy.y) then
+            table.remove(stage.enemy_container,id) end
+
+        spr(385,enemy.x*16,enemy.y*16,0)
+    end
 end
 
 Game={
@@ -119,6 +145,12 @@ Game={
     enemy_number={5,10,15,20},
     stage=0,
     hiscore={0,0,0,0},
+    movement_patterns={ --possible movement
+        {x=0,y=-1}, --up
+        {x=0,y=1},  --down
+        {x=-1,y=0}, --left
+        {x=1,y=0}   --right
+    }
 }
 
 function TIC()
@@ -155,13 +187,13 @@ function TIC()
             Player=newPlayer()
         else Player.update() end
 
-        -- where to store and update them?
         if stage.enemy_created~=stage.enemy and
         (Game.time-stage.timer)//120==0 then
-            newEnemy(358+Game.time%2*2) --random
+            local enemy=newEnemy(358+Game.time%2*2) --random
+            table.insert(stage.enemy_container,#stage.enemy_container+1,enemy)
             stage.enemy_count=stage.enemy_count+1
         end
-
+        enemy_updater()
         if stage.enemy_left==0 then
             Game.mode=2
         end
