@@ -107,6 +107,7 @@ local function newEnemy (model)
     enemy.autoshoot = function(self)
         return self
     end
+    return enemy
 end
 
 local function newPlayer ()
@@ -137,7 +138,10 @@ local function newPlayer ()
         if btn(3) then self.direction=3 end
         if btn(3) and self.collision_check(3) then self.vx=1
         else self.vx=0 end
+        spr(257,self.x,self.y,6,1,0,self.direction,2,2)
+        --id x y alpha scale flip rotate w h
     end
+    return player
 end
 
 local function newStage(stage_number)
@@ -160,10 +164,12 @@ Game={
     screen_columns=30,
     screen_width=240,
     screen_height=136,
-    player=0,--if there is a player
+    player_count=0,--if there is a player
+    player={},
     enemy_number={5,10,15,20},
     current_stage=1,
     stage_count=4,
+    stage={},
     hiscore={0,0,0,0},
     sprites={
         player={normal=0,enchanced=0},
@@ -211,23 +217,24 @@ function TIC()
         map()
         Game.mode=2
     elseif Game.mode==2 then --game        
-        local stage=newStage(Game.current_stage)
+        Game.stage=newStage(Game.current_stage)
 
-        if stage.timer==0 then -- once only, setup timer
-            stage.timer=Game.time end
+        if Game.stage.timer==0 then -- once only, setup timer
+            Game.stage.timer=Game.time end
 
-        if Game.player==0 then  -- once only, create player tank
-            Player=newPlayer()
-        else Player.update() end
+        if Game.player_count==0 then  -- once only, create player tank
+            Game.player=newPlayer()
+            Game.player_count=Game.player_count+1
+        else Game.player.update() end
 
-        if stage.enemy_created~=stage.enemy and
-        (Game.time-stage.timer)//120==0 then
+        if Game.stage.enemy_created~=Game.stage.enemy and
+        (Game.time-Game.stage.timer)//120==0 then
             local enemy=newEnemy(358+Game.time%2*2) --random
-            table.insert(stage.enemy_container,#stage.enemy_container+1,enemy)
-            stage.enemy_count=stage.enemy_count+1
+            table.insert(Game.stage.enemy_container,#Game.stage.enemy_container+1,enemy)
+            Game.stage.enemy_count=Game.stage.enemy_count+1
         end
-        enemy_updater(stage)
-        if stage.enemy_left==0 then
+        enemy_updater(Game.stage)
+        if Game.stage.enemy_left==0 then
             Game.mode=2
         end
 
@@ -239,16 +246,16 @@ function TIC()
         print(Game.current_stage)
         print(Game.hiscore[Game.current_stage])
         for i=0,3 do
-            local points = 100*(i+1)*stage.results[i]
+            local points = 100*(i+1)*Game.stage.results[i]
             spr() -- tank icon
             print(points)
             print("PTS")
-            stage.points=stage.points+points
-            stage.results[4]=stage.results[4]+stage.results[i]
+            Game.stage.points=Game.stage.points+points
+            Game.stage.results[4]=Game.stage.results[4]+Game.stage.results[i]
         end
         print("TOTAL")
-        print(stage.points)
-        print(stage.results[4])
+        print(Game.stage.points)
+        print(Game.stage.results[4])
 
         spr(161+0,18+20*0,108,0,1) --[
         spr(Game.time%60//30*(161+1),18+20*1,108,0,1) --z
