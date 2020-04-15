@@ -1,4 +1,4 @@
--- title:  Battle City Remake
+-- title:  Battle City: A Mini Remake
 -- author: Isshiki
 -- desc:   A mini remake of Battle City in Lua and TIC-80
 -- script: lua
@@ -21,7 +21,7 @@ local function hitByBullet(x,y)
     return mapType(x,y)==5
 end
 
-local function enemy_updater(stage)
+local function enemy_updater(stage) -- tables are passed by reference
     for id,enemy in pairs(stage.enemy_container) do
 
         local temp_x=enemy.x+enemy.movement.x --next move
@@ -38,14 +38,15 @@ local function enemy_updater(stage)
     end
 end
 
-local function stage_updater(stage)
-    local stage_coordinate=Game.map_coordinates[stage]
-    local stagex=stage_coordinate[1]
-    local stagey=stage_coordinate[2]
-
-    for x=0,29 do
-        for y=0,16 do
-            local tile=mget(x+stagex,y+stagey)
+local function stage_updater(current_stage)
+    local stage_coordinate=Game.map_coordinates[current_stage]
+    local stagex=stage_coordinate.x
+    local stagey=stage_coordinate.y
+    for x=0,Game.screen_columns-1 do
+        for y=0,Game.screen_rows-1 do
+            local mirror_x=x+stagex
+            local mirror_y=y+stagey
+            local tile=mget(mirror_x,mirror_y)
             mset(x,y,tile) --draw the map for the current stage
         end
     end
@@ -144,6 +145,7 @@ local function newStage(stage_number)
         results={0,0,0,0,0}, -- number of model 1, 2, 3, 4 and sum
         points=0,
         timer=0,
+        enemy_count=0,
         enemy_container={},
         enemy_created=0,
         enemy_left=Game.enemy_number[stage_number],
@@ -154,10 +156,20 @@ end
 Game={
     mode=0,
     time=0,
+    screen_rows=17,
+    screen_columns=30,
+    screen_width=240,
+    screen_height=136,
     player=0,--if there is a player
     enemy_number={5,10,15,20},
-    stage=0,
+    current_stage=1,
+    stage_count=4,
     hiscore={0,0,0,0},
+    sprites={
+        player={normal=0,enchanced=0},
+        enemy={level1=0,level2=0,level3=0,level4=0},
+        effects={},
+    },
     movement_patterns={ --possible movement
         {x=0,y=-1}, --up
         {x=0,y=1},  --down
@@ -165,16 +177,16 @@ Game={
         {x=1,y=0}   --right
     },
     map_coordinates={
-        {30,0},
-        {60,0},
-        {90,0},
-        {120,0},
+        {x=30,y=0},
+        {x=60,y=0},
+        {x=90,y=0},
+        {x=120,y=0},
     }
 }
 
 function TIC()
     if Game.mode==0 then
-        cls()
+        cls(0)
         spr(129+0,18+32*0,20,0,4) --B
         spr(129+1,18+32*1,20,0,4) --A
         spr(129+2,18+32*2,20,0,4) --T
@@ -191,13 +203,14 @@ function TIC()
         spr(161+0,18+20*0,108,0,1) --[
         spr(Game.time%60//30*(161+1),18+20*1,108,0,1) --z
         spr(161+2,18+20*2,108,0,1) --]
-
         -- start
         if btn(4) then Game.mode = 1 end
-    elseif Game.mode==1 then --game
-        cls()          -- wipe out previous map
-        stage_updater(Game.stage) -- draw new map for each stage
-        local stage=newStage(Game.stage)
+    elseif Game.mode==1 then
+        cls(3)          -- wipe out previous map
+        stage_updater(Game.current_stage) -- draw new map for each stage
+        Game.mode=2
+    elseif Game.mode==2 then --game        
+        local stage=newStage(Game.current_stage)
 
         if stage.timer==0 then -- once only, setup timer
             stage.timer=Game.time end
@@ -212,18 +225,18 @@ function TIC()
             table.insert(stage.enemy_container,#stage.enemy_container+1,enemy)
             stage.enemy_count=stage.enemy_count+1
         end
-        enemy_updater()
+        enemy_updater(stage)
         if stage.enemy_left==0 then
             Game.mode=2
         end
 
-    elseif Game.mode==2 then --summary page
+    elseif Game.mode==3 then --summary page
         cls()
         print("HI-SCORE")
         print(Game.hiscore)
         print("STAGE")
-        print(Game.stage)
-        print(Game.hiscore[Game.stage])
+        print(Game.current_stage)
+        print(Game.hiscore[Game.current_stage])
         for i=0,3 do
             local points = 100*(i+1)*stage.results[i]
             spr() -- tank icon
@@ -239,10 +252,11 @@ function TIC()
         spr(161+0,18+20*0,108,0,1) --[
         spr(Game.time%60//30*(161+1),18+20*1,108,0,1) --z
         spr(161+2,18+20*2,108,0,1) --]
-        if btn(4) and Game.stage~=4 then
-            Game.stage=Game.stage+1
+        if btn(4) and Game.current_stage~=Game.stage_count then
+            --Game.current_stage=Game.current_stage+1
             Game.mode=1
         else Game.mode=0 end
     end
-    Game.time = Game.time + 1
+    map()
+    Game.time=Game.time+1
 end
