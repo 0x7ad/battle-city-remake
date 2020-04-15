@@ -138,6 +138,19 @@ local function enemy_updater(stage)
     end
 end
 
+local function stage_updater(stage)
+    local stage_coordinate=Game.map_coordinates[stage]
+    local stagex=stage_coordinate[1]
+    local stagey=stage_coordinate[2]
+
+    for x=0,29 do
+        for y=0,16 do
+            local tile=mget(x+stagex,y+stagey)
+            mset(x,y,tile) --draw the map for the current stage
+        end
+    end
+end
+
 Game={
     mode=0,
     time=0,
@@ -150,6 +163,12 @@ Game={
         {x=0,y=1},  --down
         {x=-1,y=0}, --left
         {x=1,y=0}   --right
+    },
+    map_coordinates={
+        {30,0},
+        {60,0},
+        {90,0},
+        {120,0},
     }
 }
 
@@ -177,7 +196,7 @@ function TIC()
         if btn(4) then Game.mode = 1 end
     elseif Game.mode==1 then --game
         cls()          -- wipe out previous map
-        map(0,0,30,17) -- draw new map for each stage
+        stage_updater(Game.stage) -- draw new map for each stage
         local stage=newStage(Game.stage)
 
         if stage.timer==0 then -- once only, setup timer
