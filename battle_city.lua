@@ -21,6 +21,37 @@ local function hitByBullet(x,y)
     return mapType(x,y)==5
 end
 
+local function enemy_updater(stage)
+    for id,enemy in pairs(stage.enemy_container) do
+
+        local temp_x=enemy.x+enemy.movement.x --next move
+        local temp_y=enemy.x+enemy.movement.y
+
+        if isSolid(temp_x,temp_y) then
+            enemy.movement=Game.movement_patterns[math.random(1,4)]
+        else enemy.x=temp_x;enemy.y=temp_y end
+
+        if hitByBullet(enemy.x,enemy.y) then
+            table.remove(stage.enemy_container,id) end
+
+        spr(385,enemy.x*16,enemy.y*16,0)
+    end
+end
+
+local function stage_updater(stage)
+    local stage_coordinate=Game.map_coordinates[stage]
+    local stagex=stage_coordinate[1]
+    local stagey=stage_coordinate[2]
+
+    for x=0,29 do
+        for y=0,16 do
+            local tile=mget(x+stagex,y+stagey)
+            mset(x,y,tile) --draw the map for the current stage
+        end
+    end
+end
+
+-- classes
 local function newBullet(x,y,direction)
     return {
         x=x,
@@ -84,28 +115,27 @@ local function newPlayer ()
     player.creation = function(self)
         Game.player = Game.player + 1
     end
-    player.collision_check_h = function(self)
-        return isSolid(self.x+self.vx,self.y+self.vy) or
-        isSolid(self.x+(self.size-1)+self.vx,self.y+self.vy) or
-        isSolid(self.x+self.vx,self.y+(self.size-1)+self.vy) or
-        isSolid(self.x+(self.size-1)+self.vx,
-                self.y+(self.size-1)+self.vy)
+    player.collision_check = function(self,dir) --arrow key code
+        local x=Game.movement_patterns[dir].x
+        local y=Game.movement_patterns[dir].y
+        return isSolid(self.x+x,self.y+y)
     end
-    --todo
-    player.collision_check_v = function(self)
-        return isSolid(self.x+self.vx,self.y+self.vy) or
-        isSolid(self.x+(self.size-1)+self.vx,self.y+self.vy) or
-        isSolid(self.x+self.vx,self.y+(self.size-1)+self.vy) or
-        isSolid(self.x+(self.size-1)+self.vx,
-                self.y+(self.size-1)+self.vy)
-    end
+    player.update = function(self)--move and rotate
+        if btn(0) then self.direction=0 end
+        if btn(0) and self.collision_check(0) then self.vy=-1
+        else self.vy=0 end
 
-    player.update = function(self)
-        if btn(2) then self.vx=-1; self.direction=3 --move and rotate
-        elseif btn(3) then self.vx=1; self.direction=1 end
-        if btn(0) then self.vy=-1; self.direction=0
-        elseif btn(1) then self.vy=1; self.direction=2 end
-        if self.collision_check_h() then self.vx = 0 end
+        if btn(1) then self.direction=1 end
+        if btn(1) and self.collision_check(1) then self.vy=1
+        else self.vy=0 end
+
+        if btn(2) then self.direction=2 end
+        if btn(2) and self.collision_check(2) then self.vx=-1
+        else self.vx=0 end
+
+        if btn(3) then self.direction=3 end
+        if btn(3) and self.collision_check(3) then self.vx=1
+        else self.vx=0 end
     end
 end
 
@@ -119,36 +149,6 @@ local function newStage(stage_number)
         enemy_left=Game.enemy_number[stage_number],
         enemy=Game.enemy_number[stage_number], --number of rivals for each stage
     }
-end
-
-local function enemy_updater(stage)
-    for id,enemy in pairs(stage.enemy_container) do
-
-        local temp_x=enemy.x+enemy.movement.x --next move
-        local temp_y=enemy.x+enemy.movement.y
-
-        if isSolid(temp_x,temp_y) then
-            enemy.movement=Game.movement_patterns[math.random(1,4)]
-        else enemy.x=temp_x;enemy.y=temp_y end
-
-        if hitByBullet(enemy.x,enemy.y) then
-            table.remove(stage.enemy_container,id) end
-
-        spr(385,enemy.x*16,enemy.y*16,0)
-    end
-end
-
-local function stage_updater(stage)
-    local stage_coordinate=Game.map_coordinates[stage]
-    local stagex=stage_coordinate[1]
-    local stagey=stage_coordinate[2]
-
-    for x=0,29 do
-        for y=0,16 do
-            local tile=mget(x+stagex,y+stagey)
-            mset(x,y,tile) --draw the map for the current stage
-        end
-    end
 end
 
 Game={
