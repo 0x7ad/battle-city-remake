@@ -208,6 +208,7 @@ function TIC()
     elseif Game.mode==1 then
         cls(3)          -- wipe out previous map
         stage_updater(Game.current_stage) -- draw new map for each stage
+        map()
         Game.mode=2
     elseif Game.mode==2 then --game        
         local stage=newStage(Game.current_stage)
@@ -257,6 +258,5 @@ function TIC()
             Game.mode=1
         else Game.mode=0 end
     end
-    map()
     Game.time=Game.time+1
 end
