@@ -17,6 +17,7 @@ Game={
     enemy_number={5,10,15,20},
     current_stage=1,
     stage_count=4,
+    ingame=0,
     stage={},
     hiscore={0,0,0,0},
     sprites={
@@ -38,9 +39,8 @@ Game={
     }
 }
 
-Player={}
-
 local function mapType(x, y)
+    if mget(x, y) == 0+0 then return 0 end -- empty
     if mget(x, y) == 33+0 then return 1 end -- brick
     if mget(x, y) == 33+1 then return 2 end -- iron
     if mget(x, y) == 33+2 then return 3 end -- bush
@@ -49,7 +49,8 @@ local function mapType(x, y)
 end
 
 local function isSolid(x,y)
-    return mapType(x,y)~=2
+    print(mapType(x,y)~=0 and mapType(x,y)~=3 and "failed" or "passed",0,88)
+    return mapType(x,y)~=0 and mapType(x,y)~=3
 end
 
 local function hitByBullet(x,y)
@@ -73,7 +74,7 @@ local function enemy_updater(stage) -- tables are passed by reference
     end
 end
 
-local function stage_updater(current_stage)
+local function stage_builder(current_stage)
     local stage_coordinate=Game.map_coordinates[current_stage]
     local stagex=stage_coordinate.x
     local stagey=stage_coordinate.y
@@ -104,6 +105,7 @@ local function newBullet(x,y,direction)
 end
 local Tank={
     id=257,
+    lifetime=999,
     shoot_interval=5,
     created_at=Game.time,
     direction=Game.time%3; -- rotate parameter for spr
@@ -140,41 +142,65 @@ function PlayerTank:generator()
     Game.player = Game.player + 1
 end
 
-function PlayerTank:collision_check(dir) --arrow key code
-    local x=Game.movement_patterns[dir+1].x
-    local y=Game.movement_patterns[dir+1].y
+function PlayerTank:collision_ahead() --arrow key code
+    local direction=self.direction
+    local x=Game.movement_patterns[direction+1].x
+    local y=Game.movement_patterns[direction+1].y
+    print("dir: "..direction)
+    print("mx:"..x.."; my:"..y,0,3)
+    print("cx: "..self.x.."; cy: "..self.y,0,11)
+    print("mget id: "..mget(self.x+x,self.y+y),0,20)
+    print(isSolid(self.x+x,self.y+y) and "solid" or "not solid",0,29)
     return isSolid(self.x+x,self.y+y)
 end
 
 function PlayerTank:dir_to_rotate()
     if self.direction==1 then self.rotate=2
     elseif self.direction==2 then self.rotate=3
-    elseif self.direction==3 then self.rotate=1 end
+    elseif self.direction==3 then self.rotate=1
+    elseif self.direction==0 then self.rotate=0 end
 end
 
 function PlayerTank:update()
-    if btn(0) then self.direction=0 end
-    if btn(0) and self:collision_check(0) then self.vy=-1
+    if btn(1) or btn(0) then
+        if btn(0) then 
+            if not self:collision_ahead() then self.vy=-1 end
+            self.direction=0
+        elseif btn(1) then 
+            if not self:collision_ahead() then self.vy=1 end
+            self.direction=1 end
+        self.vx=0
     else self.vy=0 end
 
-    if btn(1) then self.direction=1 end
-    if btn(1) and self:collision_check(1) then self.vy=1
-    else self.vy=0 end
-
-    if btn(2) then self.direction=2 end
-    if btn(2) and self:collision_check(2) then self.vx=-1
+    if btn(2) or btn(3) then
+        if btn(2) then
+            if not self:collision_ahead() then self.vx=-1 end
+            self.direction=2
+        elseif btn(3) then
+            if not self:collision_ahead() then self.vx=1 end
+            self.direction=3 end
+        self.vy=0
     else self.vx=0 end
 
-    if btn(3) then self.direction=3 end
-    if btn(3) and self:collision_check(3) then self.vx=1
-    else self.vx=0 end
-
+    print(self.vy,8,65);print(self.vx,0,65)
     self:dir_to_rotate()
+    print(self.vy,8,74);print(self.vx,0,74)
     self.x=self.x+self.vx
     self.y=self.y+self.vy
-
-    spr(257,self.x,self.y,6,1,0,self.rotate,2,2)
-    --id x y alpha scale flip rotate w h
+    print(self.vy,8,83);print(self.vx,0,83)
+    local result=self:collision_ahead() and "can't pass" or "passed"
+    print("check"..result,0,38)
+    print("vx:"..self.vx.." vy:"..self.vy,0,47)
+    -- visual effect
+    if self.lifetime<30 then
+        for i=0,8 do
+            spr(481+i,self.x,self.y) end
+    elseif self.lifetime<90 then
+        spr(257,self.x,self.y,6,1,0,self.rotate,2,2)
+        spr(Game.time%2*289,self.x,self.y,6,1,0,self.rotate,2,2)
+    else spr(257,self.x,self.y,6,1,0,self.rotate,2,2)
+        --id x y alpha scale flip rotate w h
+    end
 end
 
 local function newTank(model)
@@ -255,11 +281,17 @@ function TIC()
         if btn(4) then Game.mode = 1 end
     elseif Game.mode==1 then
         cls(3)          -- wipe out previous map
-        stage_updater(Game.current_stage) -- draw new map for each stage
-        map()
+        stage_builder(Game.current_stage) -- draw new map for each stage
+        --map()
         Game.mode=2
-    elseif Game.mode==2 then --game        
-        Game.stage=newStage(Game.current_stage)
+    elseif Game.mode==2 then --game      
+        cls() -- might not be necessary since we might not need a static map
+        map(Game.map_coordinates[Game.current_stage].x, --static content
+            Game.map_coordinates[Game.current_stage].y)
+        
+        if Game.ingame==0 then
+            Game.stage=newStage(Game.current_stage)
+            Game.ingame=1 end
 
         if Game.stage.timer==0 then -- once only, setup timer
             Game.stage.timer=Game.time end
@@ -278,10 +310,8 @@ function TIC()
         enemy_updater(Game.stage)
         if Game.stage.enemy_left==0 then
             Game.mode=2
-        end--]]
-        cls()
-        map(Game.map_coordinates[Game.current_stage].x,
-            Game.map_coordinates[Game.current_stage].y)
+        end
+        --]]
     elseif Game.mode==3 then --summary page
         cls()
         print("HI-SCORE")
