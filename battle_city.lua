@@ -146,12 +146,17 @@ function PlayerTank:collision_ahead() --arrow key code
     local direction=self.direction
     local x=Game.movement_patterns[direction+1].x
     local y=Game.movement_patterns[direction+1].y
-    print("dir: "..direction)
+    local next_x=self.x+x
+    local next_y=self.y+y
     print("mx:"..x.."; my:"..y,0,3)
     print("cx: "..self.x.."; cy: "..self.y,0,11)
     print("mget id: "..mget(self.x+x,self.y+y),0,20)
     print(isSolid(self.x+x,self.y+y) and "solid" or "not solid",0,29)
-    return isSolid(self.x+x,self.y+y)
+    return isSolid(self.x+x,self.y+y) or
+            next_x<0 or -- boundaries
+            next_y<0 or
+            next_x>Game.screen_width or
+            next_y>Game.screen_height
 end
 
 function PlayerTank:dir_to_rotate()
@@ -164,7 +169,7 @@ end
 function PlayerTank:update()
     if btn(1) or btn(0) then
         if btn(0) then 
-            if not self:collision_ahead() then self.vy=-1 end
+            if not self:collision_ahead()then self.vy=-1 end
             self.direction=0
         elseif btn(1) then 
             if not self:collision_ahead() then self.vy=1 end
