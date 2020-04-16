@@ -5,6 +5,41 @@
 -- credits: BearThorne for autopiloting and collision detection
 
 -- system
+Game={
+    mode=0,
+    time=0,
+    screen_rows=17,
+    screen_columns=30,
+    screen_width=240,
+    screen_height=136,
+    player_count=0,--if there is a player
+    player=nil,
+    enemy_number={5,10,15,20},
+    current_stage=1,
+    stage_count=4,
+    stage={},
+    hiscore={0,0,0,0},
+    sprites={
+        player={normal=0,enchanced=0},
+        enemy={level1=0,level2=0,level3=0,level4=0},
+        effects={},
+    },
+    movement_patterns={ --possible movement
+        {x=0,y=-1}, --up
+        {x=0,y=1},  --down
+        {x=-1,y=0}, --left
+        {x=1,y=0}   --right
+    },
+    map_coordinates={
+        {x=30,y=0},
+        {x=60,y=0},
+        {x=90,y=0},
+        {x=120,y=0},
+    }
+}
+
+Player={}
+
 local function mapType(x, y)
     if mget(x, y) == 33+0 then return 1 end -- brick
     if mget(x, y) == 33+1 then return 2 end -- iron
@@ -67,6 +102,80 @@ local function newBullet(x,y,direction)
         end,
     }
 end
+local Tank={
+    id=257,
+    shoot_interval=5,
+    created_at=Game.time,
+    direction=Game.time%3; -- rotate parameter for spr
+    x=0,
+    y=0,
+    vx=0,
+    vy=0,
+    movement=Game.movement_patterns[math.random(1,4)],
+    -- shooting_range=10,
+    size=16, --both length or width
+}
+function Tank:new(obj)
+    local tank=obj or {}
+    setmetatable(tank,self)
+    self.__index=self
+    return tank
+end
+
+function Tank:shoot()
+    newBullet(self.x,self.y,self.direction)
+end
+
+function Tank:rotate()
+    return true
+end
+
+function Tank:hit()
+    spr(Game.timer%2*289)
+    spr(Game.timer%2*291)
+end
+
+PlayerTank=Tank:new({create_location_x=10,create_location_y=15,rotate=0})
+function PlayerTank:generator()
+    Game.player = Game.player + 1
+end
+
+function PlayerTank:collision_check(dir) --arrow key code
+    local x=Game.movement_patterns[dir+1].x
+    local y=Game.movement_patterns[dir+1].y
+    return isSolid(self.x+x,self.y+y)
+end
+
+function PlayerTank:dir_to_rotate()
+    if self.direction==1 then self.rotate=2
+    elseif self.direction==2 then self.rotate=3
+    elseif self.direction==3 then self.rotate=1 end
+end
+
+function PlayerTank:update()
+    if btn(0) then self.direction=0 end
+    if btn(0) and self:collision_check(0) then self.vy=-1
+    else self.vy=0 end
+
+    if btn(1) then self.direction=1 end
+    if btn(1) and self:collision_check(1) then self.vy=1
+    else self.vy=0 end
+
+    if btn(2) then self.direction=2 end
+    if btn(2) and self:collision_check(2) then self.vx=-1
+    else self.vx=0 end
+
+    if btn(3) then self.direction=3 end
+    if btn(3) and self:collision_check(3) then self.vx=1
+    else self.vx=0 end
+
+    self:dir_to_rotate()
+    self.x=self.x+self.vx
+    self.y=self.y+self.vy
+
+    spr(257,self.x,self.y,6,1,0,self.rotate,2,2)
+    --id x y alpha scale flip rotate w h
+end
 
 local function newTank(model)
     return {
@@ -110,40 +219,6 @@ local function newEnemy (model)
     return enemy
 end
 
-local function newPlayer ()
-    local player = newTank() --257 by default
-    player.create_location_x = 10
-    player.create_location_y = 15
-    player.creation = function(self)
-        Game.player = Game.player + 1
-    end
-    player.collision_check = function(self,dir) --arrow key code
-        local x=Game.movement_patterns[dir].x
-        local y=Game.movement_patterns[dir].y
-        return isSolid(self.x+x,self.y+y)
-    end
-    player.update = function(self)--move and rotate
-        if btn(0) then self.direction=0 end
-        if btn(0) and self.collision_check(0) then self.vy=-1
-        else self.vy=0 end
-
-        if btn(1) then self.direction=1 end
-        if btn(1) and self.collision_check(1) then self.vy=1
-        else self.vy=0 end
-
-        if btn(2) then self.direction=2 end
-        if btn(2) and self.collision_check(2) then self.vx=-1
-        else self.vx=0 end
-
-        if btn(3) then self.direction=3 end
-        if btn(3) and self.collision_check(3) then self.vx=1
-        else self.vx=0 end
-        spr(257,self.x,self.y,6,1,0,self.direction,2,2)
-        --id x y alpha scale flip rotate w h
-    end
-    return player
-end
-
 local function newStage(stage_number)
     return {
         results={0,0,0,0,0}, -- number of model 1, 2, 3, 4 and sum
@@ -156,39 +231,6 @@ local function newStage(stage_number)
         enemy=Game.enemy_number[stage_number], --number of rivals for each stage
     }
 end
-
-Game={
-    mode=0,
-    time=0,
-    screen_rows=17,
-    screen_columns=30,
-    screen_width=240,
-    screen_height=136,
-    player_count=0,--if there is a player
-    player={},
-    enemy_number={5,10,15,20},
-    current_stage=1,
-    stage_count=4,
-    stage={},
-    hiscore={0,0,0,0},
-    sprites={
-        player={normal=0,enchanced=0},
-        enemy={level1=0,level2=0,level3=0,level4=0},
-        effects={},
-    },
-    movement_patterns={ --possible movement
-        {x=0,y=-1}, --up
-        {x=0,y=1},  --down
-        {x=-1,y=0}, --left
-        {x=1,y=0}   --right
-    },
-    map_coordinates={
-        {x=30,y=0},
-        {x=60,y=0},
-        {x=90,y=0},
-        {x=120,y=0},
-    }
-}
 
 function TIC()
     if Game.mode==0 then
@@ -223,10 +265,10 @@ function TIC()
             Game.stage.timer=Game.time end
 
         if Game.player_count==0 then  -- once only, create player tank
-            Game.player=newPlayer()
+            Game.player=PlayerTank:new()
             Game.player_count=Game.player_count+1
-        else Game.player.update() end
-
+        else Game.player:update() end --WARNING call a method using : instead of dot
+        --[[
         if Game.stage.enemy_created~=Game.stage.enemy and
         (Game.time-Game.stage.timer)//120==0 then
             local enemy=newEnemy(358+Game.time%2*2) --random
@@ -236,8 +278,10 @@ function TIC()
         enemy_updater(Game.stage)
         if Game.stage.enemy_left==0 then
             Game.mode=2
-        end
-
+        end--]]
+        cls()
+        map(Game.map_coordinates[Game.current_stage].x,
+            Game.map_coordinates[Game.current_stage].y)
     elseif Game.mode==3 then --summary page
         cls()
         print("HI-SCORE")
