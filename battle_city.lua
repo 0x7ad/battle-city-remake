@@ -31,7 +31,8 @@ Game={
         {x=-1,y=0}, --left
         {x=1,y=0}   --right
     },
-    map_coordinates={
+    map_location={
+        {x=00,y=0},
         {x=30,y=0},
         {x=60,y=0},
         {x=90,y=0},
@@ -39,18 +40,20 @@ Game={
     }
 }
 
-local function mapType(x, y)
-    if mget(x, y) == 0+0 then return 0 end -- empty
-    if mget(x, y) == 33+0 then return 1 end -- brick
-    if mget(x, y) == 33+1 then return 2 end -- iron
-    if mget(x, y) == 33+2 then return 3 end -- bush
-    if mget(x, y) == 33+3 then return 4 end -- water
-    if mget(x, y) == 33+4 then return 5 end -- bullet
+local function mapType(cell_x, cell_y)
+    if mget(cell_x, cell_y) == 0+0 then return 0 end -- empty
+    if mget(cell_x, cell_y) == 33+0 then return 1 end -- brick
+    if mget(cell_x, cell_y) == 33+1 then return 2 end -- iron
+    if mget(cell_x, cell_y) == 33+2 then return 3 end -- bush
+    if mget(cell_x, cell_y) == 33+3 then return 4 end -- water
+    if mget(cell_x, cell_y) == 33+4 then return 5 end -- bullet
 end
 
 local function isSolid(x,y)
-    print(mapType(x,y)~=0 and mapType(x,y)~=3 and "failed" or "passed",0,88)
-    return mapType(x,y)~=0 and mapType(x,y)~=3
+    print(mapType((x)//8,(y)//8)~=0 and mapType((x)//8,(y)//8)~=3 and "failed" or "passed",0,88)
+    print("cellx "..(x//8).."celly"..(y//8),0,97)
+    print("x "..x.."y"..y,0,106)
+    return mapType((x)//8,(y)//8)~=0 and mapType((x)//8,(y)//8)~=3
 end
 
 local function hitByBullet(x,y)
@@ -75,14 +78,14 @@ local function enemy_updater(stage) -- tables are passed by reference
 end
 
 local function stage_builder(current_stage)
-    local stage_coordinate=Game.map_coordinates[current_stage]
+    local stage_coordinate=Game.map_location[current_stage]
     local stagex=stage_coordinate.x
     local stagey=stage_coordinate.y
     for x=0,Game.screen_columns-1 do
         for y=0,Game.screen_rows-1 do
             local mirror_x=x+stagex
             local mirror_y=y+stagey
-            local tile=mget(mirror_x,mirror_y)
+            local tile=mget(mirror_x,mirror_y)        
             mset(x,y,tile) --draw the map for the current stage
         end
     end
@@ -148,11 +151,12 @@ function PlayerTank:collision_ahead() --arrow key code
     local y=Game.movement_patterns[direction+1].y
     local next_x=self.x+x
     local next_y=self.y+y
+    rect(next_x,next_y,8,8,4)
     print("mx:"..x.."; my:"..y,0,3)
     print("cx: "..self.x.."; cy: "..self.y,0,11)
     print("mget id: "..mget(self.x+x,self.y+y),0,20)
-    print(isSolid(self.x+x,self.y+y) and "solid" or "not solid",0,29)
-    return isSolid(self.x+x,self.y+y) or
+    print(isSolid(next_x,next_y) and "solid" or "not solid",0,29)
+    return isSolid(next_x,next_y) or
             next_x<0 or -- boundaries
             next_y<0 or
             next_x>Game.screen_width or
@@ -169,9 +173,9 @@ end
 function PlayerTank:update()
     if btn(1) or btn(0) then
         if btn(0) then 
-            if not self:collision_ahead()then self.vy=-1 end
+            if not self:collision_ahead() then self.vy=-1 end
             self.direction=0
-        elseif btn(1) then 
+        elseif btn(1) then
             if not self:collision_ahead() then self.vy=1 end
             self.direction=1 end
         self.vx=0
@@ -189,10 +193,8 @@ function PlayerTank:update()
 
     print(self.vy,8,65);print(self.vx,0,65)
     self:dir_to_rotate()
-    print(self.vy,8,74);print(self.vx,0,74)
     self.x=self.x+self.vx
     self.y=self.y+self.vy
-    print(self.vy,8,83);print(self.vx,0,83)
     local result=self:collision_ahead() and "can't pass" or "passed"
     print("check"..result,0,38)
     print("vx:"..self.vx.." vy:"..self.vy,0,47)
@@ -204,6 +206,7 @@ function PlayerTank:update()
         spr(257,self.x,self.y,6,1,0,self.rotate,2,2)
         spr(Game.time%2*289,self.x,self.y,6,1,0,self.rotate,2,2)
     else spr(257,self.x,self.y,6,1,0,self.rotate,2,2)
+        rectb(self.x,self.y,1,1,4)
         --id x y alpha scale flip rotate w h
     end
 end
@@ -285,21 +288,21 @@ function TIC()
         -- start
         if btn(4) then Game.mode = 1 end
     elseif Game.mode==1 then
-        cls(3)          -- wipe out previous map
-        stage_builder(Game.current_stage) -- draw new map for each stage
+        --cls(3)          -- wipe out previous map
+        --stage_builder(Game.current_stage) -- draw new map for each stage
         --map()
         Game.mode=2
-    elseif Game.mode==2 then --game      
-        cls() -- might not be necessary since we might not need a static map
-        map(Game.map_coordinates[Game.current_stage].x, --static content
-            Game.map_coordinates[Game.current_stage].y)
-        
+    elseif Game.mode==2 then --game
+        cls()
+        map(Game.map_location[Game.current_stage].x, --static content
+            Game.map_location[Game.current_stage].y)
+            --[[
         if Game.ingame==0 then
             Game.stage=newStage(Game.current_stage)
             Game.ingame=1 end
 
         if Game.stage.timer==0 then -- once only, setup timer
-            Game.stage.timer=Game.time end
+            Game.stage.timer=Game.time end--]]
 
         if Game.player_count==0 then  -- once only, create player tank
             Game.player=PlayerTank:new()
