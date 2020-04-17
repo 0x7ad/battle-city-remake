@@ -8,6 +8,8 @@
 Game={
     mode=0,
     time=0,
+    player_generation_location_x=10,
+    player_generation_location_y=12,
     screen_rows=17,
     screen_columns=30,
     screen_width=240,
@@ -186,10 +188,10 @@ function Tank:hit()
     spr(Game.timer%2*291)
 end
 
-local PlayerTank=Tank:new({create_location_x=10,
-                    create_location_y=15,
-                    moving_v=false,
-                    moving_h=false,})
+local PlayerTank=Tank:new({x=Game.player_generation_location_x,
+                            y=Game.player_generation_location_y,
+                            moving_v=false,
+                            moving_h=false,})
 function PlayerTank:timer()
     if self.created_at==0 then 
         self.created_at=Game.time 
