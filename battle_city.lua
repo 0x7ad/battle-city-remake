@@ -114,21 +114,6 @@ local function stage_builder(current_stage)
 end
 
 -- classes
-local function newBullet(x,y,direction)
-    return {
-        x=x,
-        y=y,
-        vx=2,
-        vy=3,
-        update=function(self)
-            spr(329,self.x,self.y)
-        end,
-        hit=function(self)
-            spr(321,self.x,self.y)
-        end,
-    }
-end
-
 local Bullet=Movable:new({size=8})
 
 function Bullet:new(obj)
@@ -176,14 +161,6 @@ function Tank:new(obj)
     setmetatable(tank,self)
     self.__index=self
     return tank
-end
-
-function Tank:shoot()
-    newBullet(self.x,self.y,self.direction)
-end
-
-function Tank:rotate()
-    return true
 end
 
 function Tank:hit()
@@ -313,33 +290,6 @@ function PlayerTank:update()
     self.x=self.x+self.vx
     self.y=self.y+self.vy
     print("vx:"..self.vx.." vy:"..self.vy,0,47)
-end
-
-local function newTank(model)
-    return {
-        id=model or 257,
-        shoot_interval=5,
-        created_at=Game.time,
-        direction=Game.time%3; -- rotate parameter for spr
-        x,
-        y,
-        vx=0,
-        vy=0,
-        movement=Game.movement_patterns[math.random(1,4)],
-        -- shooting_range=10,
-        size=16, --both length or width
-        shoot = function(self)
-            newBullet(self.x,self.y,self.direction)
-        end,
-        rotate=function(self)
-            return true
-        end,
-        hit=function(self)
-            
-            spr(Game.timer%2*289)
-            spr(Game.timer%2*291)
-        end
-    }
 end
 
 local function newEnemy (model)
