@@ -43,23 +43,25 @@ Game={
     bullets={}
 }
 
-local Asset={
+local Movable={
     x=0,
     y=0,
     vx=0,
     vy=0,
     direction=0,
     rotate=0,
+    size=0,-- as w always equals h
+    explosion_timestamp=0,
 }
 
-function Asset:new(obj)
-    local asset=obj or {}
-    setmetatable(asset,self)
+function Movable:new(obj)
+    local movable_object=obj or {}
+    setmetatable(movable_object,self)
     self.__index=self
-    return asset
+    return movable_object
 end
 
-function Asset:dir_to_rotate()
+function Movable:dir_to_rotate()
     if self.direction==1 then self.rotate=2
     elseif self.direction==2 then self.rotate=3
     elseif self.direction==3 then self.rotate=1
@@ -78,10 +80,6 @@ local function isSolid(x,y)
     print(mapType((x)//8,(y)//8)~=0 and mapType((x)//8,(y)//8)~=3 and "failed" or "passed",0,88)
     print("cellx "..(x//8).."celly"..(y//8),0,97)
     return mapType((x)//8,(y)//8)~=0 and mapType((x)//8,(y)//8)~=3
-end
-
-local function hitByBullet(x,y)
-    return mapType(x,y)==5
 end
 
 local function enemy_updater(stage) -- tables are passed by reference
@@ -131,7 +129,7 @@ local function newBullet(x,y,direction)
     }
 end
 
-local Bullet=Asset:new()
+local Bullet=Movable:new({size=8})
 
 function Bullet:new(obj)
     local bullet=obj or {}
@@ -145,25 +143,30 @@ function Bullet:dir_to_speed()
     self.vy=Game.movement_patterns[self.direction+1].y
 end
 
-function Bullet:update()
-    spr(329,self.x,self.y,0,1,0,self.rotate,1,1)
-        --id x y alpha scale flip rotate w h 
+function Bullet:update(id)
+    if self:collision_ahead() then
+        self.vx=0
+        self.vy=0
+        if self.explosion_timestamp==0 then
+        self.explosion_timestamp=Game.time end
+    else spr(329,self.x,self.y,0,1,0,self.rotate,1,1) end
+    --id x y alpha scale flip rotate w h
+
+    if Game.time-self.explosion_timestamp<20 then
+        spr(321+Game.time%20//10*2,self.x,self.y,0,1,0,self.rotate,2,2)
+    elseif Game.time-self.explosion_timestamp>=60 and self.explosion_timestamp~=0 then
+        table.remove(Game.bullets,id) end
     self.x=self.x+self.vx
     self.y=self.y+self.vy
-    print("bullet vx: "..self.vx.." vy: "..self.vy)
 end
 
-local Tank=Asset:new({
+local Tank=Movable:new({
     id=257,
     lifetime=999,
     shoot_interval=5,
     created_at=0,
     can_move=false,
-    direction=0; -- rotate parameter for spr
-    x=0,
-    y=0,
-    vx=0,
-    vy=0,
+    direction=0, -- rotate parameter for spr
     movement=Game.movement_patterns[math.random(1,4)],
     -- shooting_range=10,
     size=16, --both length or width
@@ -198,59 +201,38 @@ function PlayerTank:timer()
     else self.lifetime=Game.time-self.created_at end
 end
 
-function Tank:collision_ahead() --arrow key code
+function Movable:collision_ahead() --arrow key code
     local direction=self.direction
     local result_a=false
     local result_b=false
     local corner_a={x=self.x,y=self.y} --top left 0 and 2
-    local corner_b={x=self.x+15,y=self.y} -- top right 0 and 3
-    local corner_c={x=self.x,y=self.y+15} -- bottom left 2 and 1
-    local corner_d={x=self.x+15,y=self.y+15} --bottom right 1 and 3
+    local corner_b={x=self.x+self.size-1,y=self.y} -- top right 0 and 3
+    local corner_c={x=self.x,y=self.y+self.size-1} -- bottom left 2 and 1
+    local corner_d={x=self.x+self.size-1,y=self.y+self.size-1} --bottom right 1 and 3
     local vx=Game.movement_patterns[direction+1].x
     local vy=Game.movement_patterns[direction+1].y
-    print("speed x:"..vx.."; y:"..vy,0,3)
-    print("current x: "..self.x.."; cy: "..self.y,0,11)
-    print("mget id: "..mget(self.x+vx,self.y+vy),0,20)
     if direction==0 or direction==2 then
         --facing up, test corner_a and corner_b
         local next_x=corner_a.x+vx
         local next_y=corner_a.y+vy
         if next_x<0 or next_y<0 then return true end
         result_a=isSolid(next_x,next_y)
-        print(isSolid(next_x,next_y) and "solid" or "not solid",0,29)
-        print("checking x1: "..next_x.."y1: "..next_y,0,38)
-        print("dir: "..self.direction,60,29)
-        rect(next_x,next_y,1,1,3)
     else
         local next_x=corner_d.x+vx
         local next_y=corner_d.y+vy
         if next_x>Game.screen_width or next_y>Game.screen_height then
             return true end
         result_a=isSolid(next_x,next_y)
-        print(isSolid(next_x,next_y) and "solid" or "not solid",0,29)
-        print("checking x1: "..next_x.."y1: "..next_y,0,38)
-        print("dir: "..self.direction,60,29)
-        rect(next_x,next_y,1,1,3)
     end
 
     if direction==0 or direction==3 then
         local next_x=corner_b.x+vx
         local next_y=corner_b.y+vy
         result_b=isSolid(next_x,next_y)
-        rect(next_x,next_y,1,1,3)
-        print("checking x2: "..next_x.."y2: "..next_y,0,56)
-        local k=result_a and "true" or "false"
-        local j=result_b and "true" or "false"
-        print("result_a: "..k.."result_b: "..j,0,74)
         return result_a or result_b
     else local next_x=corner_c.x+vx
         local next_y=corner_c.y+vy
         result_b=isSolid(next_x,next_y)
-        rect(next_x,next_y,1,1,3)
-        print("checking x2: "..next_x.."y2: "..next_y,0,56)
-        local k=result_a and "true" or "false"
-        local j=result_b and "true" or "false"
-        print("result_a: "..k.."result_b: "..j,0,74)
         return result_a or result_b
     end
 end
@@ -303,14 +285,14 @@ function PlayerTank:update()
             }
         elseif self.direction==1 then
             temp={
-                x=self.x+5,
+                x=self.x+3,
                 y=self.y+15,
                 direction=self.direction
             }
         elseif self.direction==2 then
             temp={
                 x=self.x,
-                y=self.y+5,
+                y=self.y+3,
                 direction=self.direction
             }
         elseif self.direction==3 then
@@ -432,7 +414,7 @@ function TIC()
         else Game.player:update() end --WARNING call a method using : instead of dot
         
         for id,bullet in pairs(Game.bullets) do
-            bullet:update()
+            bullet:update(id)
         end
         --[[
         if Game.stage.enemy_created~=Game.stage.enemy and
