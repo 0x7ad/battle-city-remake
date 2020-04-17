@@ -41,8 +41,16 @@ Game={
         {x=120,y=0},
     },
     bullets={},
-    tank_models={257,259,261,263,},
-    player_model=393,
+    --tank_models={257,259,261,263,},
+    player_model=200,
+    control_stack={},--store the sequence of key presses
+}
+
+Stage={
+    enemy_container={},
+    enemy_count=1,
+    finishing_timestamp=0,
+    finished=false,
 }
 
 local Movable={
@@ -71,13 +79,13 @@ function Movable:dir_to_rotate()
     elseif self.direction==0 then self.rotate=0 end
 end
 local function mapType(cell_x, cell_y)
-    if mget(cell_x, cell_y) == 0+0 then return 0 end -- empty
+    if mget(cell_x, cell_y) == 0+0  then return 0 end -- empty
     if mget(cell_x, cell_y) == 33+0 then return 1 end -- brick
     if mget(cell_x, cell_y) == 33+1 then return 2 end -- iron
     if mget(cell_x, cell_y) == 33+2 then return 3 end -- bush
     if mget(cell_x, cell_y) == 33+3 then return 4 end -- water
     if mget(cell_x, cell_y) == 33+4 then return 5 end -- bullet
-    if mget(cell_x, cell_y) == 33+4 then return 5 end -- tanks
+    if mget(cell_x, cell_y) >= 170  then return 6 end -- tanks
 end
 
 local function isSolid(x,y)
@@ -86,24 +94,7 @@ end
 
 local function isExplodable(x,y)
     local result=mget((x)//8,(y)//8)
-    return result>=385 and result<=451 or result==33 end
-
-local function enemy_updater(stage) -- tables are passed by reference
-    for id,enemy in pairs(stage.enemy_container) do
-
-        local temp_x=enemy.x+enemy.movement.x --next move
-        local temp_y=enemy.x+enemy.movement.y
-
-        if isSolid(temp_x,temp_y) then
-            enemy.movement=Game.movement_patterns[math.random(1,4)]
-        else enemy.x=temp_x;enemy.y=temp_y end
-
-        if hitByBullet(enemy.x,enemy.y) then
-            table.remove(stage.enemy_container,id) end
-
-        spr(385,enemy.x*16,enemy.y*16,0)
-    end
-end
+    return result>= 170 or result==33 end
 
 local function stage_builder(current_stage)
     local stage_coordinate=Game.map_location[current_stage]
@@ -129,7 +120,7 @@ function Bullet:new(obj)
     return bullet
 end
 
-function Bullet:dir_to_speed()
+function Movable:dir_to_speed()
     self.vx=Game.movement_patterns[self.direction+1].x
     self.vy=Game.movement_patterns[self.direction+1].y
 end
@@ -150,7 +141,6 @@ function Bullet:update(id)
     else spr(329,self.x,self.y,0,1,0,self.rotate,1,1) end
 
     if self.exploding==true then self:explode();self.exploding=false end
-    --id x y alpha scale flip rotate w h
     if self.explosion_timestamp~=0 and Game.time-self.explosion_timestamp<20 then
         local offset1=self.size
         local offset2=4 -- to align different sprites
@@ -329,19 +319,36 @@ function PlayerTank:update()
     self.y=self.y+self.vy
 end
 
-local function newEnemy (model)
-    local enemy = newTank(model)
-    enemy.create_location_x=math.random(22,28)
-    enemy.create_location_y=0 -- somewhere around the top right corner
-    enemy.vx=1
-    enemy.vy=1
-    enemy.autopilot = function(self)
-        return self
-    end
-    enemy.autoshoot = function(self)
-        return self
-    end
+local EnemyTank=Tank:new()
+
+function EnemyTank:new(obj)
+    local enemy=obj or {}
+    setmetatable(enemy,self)
+    self.__index=self
     return enemy
+end
+
+function EnemyTank:update()
+
+    if self:collision_ahead() then
+        self.vx=0;self.vy=0
+        self.direction=math.random(0,3);self:dir_to_speed();self:dir_to_rotate() end
+
+    spr(192,self.x,self.y,6,1,0,self.rotate,2,2)
+        --id x y alpha scale flip rotate w h
+    self.x=self.x+self.vx
+    self.y=self.y+self.vy
+end
+
+local function create_enemy()
+    if Game.time%120==0 and #Stage.enemy_container~=Stage.enemy_count then
+        local temp_dir=math.random(0,3)
+        local temp_x=Game.movement_patterns[temp_dir+1].x
+        local temp_y=Game.movement_patterns[temp_dir+1].y
+        local enemy=EnemyTank:new({x=math.random(22*8,28*8),vx=temp_x,vy=temp_y,direction=temp_dir})
+        enemy:dir_to_rotate()
+        table.insert(Stage.enemy_container,#Stage.enemy_container+1,enemy)
+    end
 end
 
 local function newStage(stage_number)
@@ -387,13 +394,6 @@ function TIC()
         cls()
         map(Game.map_location[Game.current_stage].x, --static content
             Game.map_location[Game.current_stage].y)
-            --[[
-        if Game.ingame==0 then
-            Game.stage=newStage(Game.current_stage)
-            Game.ingame=1 end
-
-        if Game.stage.timer==0 then -- once only, setup timer
-            Game.stage.timer=Game.time end--]]
 
         if Game.player_count==0 then  -- once only, create player tank
             Game.player=PlayerTank:new()
@@ -403,18 +403,17 @@ function TIC()
         for id,bullet in pairs(Game.bullets) do
             bullet:update(id)
         end
-        --[[
-        if Game.stage.enemy_created~=Game.stage.enemy and
-        (Game.time-Game.stage.timer)//120==0 then
-            local enemy=newEnemy(358+Game.time%2*2) --random
-            table.insert(Game.stage.enemy_container,#Game.stage.enemy_container+1,enemy)
-            Game.stage.enemy_count=Game.stage.enemy_count+1
+
+        create_enemy()
+
+        for id,enemy in pairs(Stage.enemy_container) do
+            enemy:update(id)
         end
-        enemy_updater(Game.stage)
-        if Game.stage.enemy_left==0 then
-            Game.mode=2
+
+        if #Stage.enemy_container==0 and Game.time-Stage.finishing_timestamp>30 and Stage.finished then
+            Game.mode=3
         end
-        --]]
+
     elseif Game.mode==3 then --summary page
         cls()
         print("HI-SCORE")
