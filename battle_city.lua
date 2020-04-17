@@ -163,11 +163,6 @@ function Tank:new(obj)
     return tank
 end
 
-function Tank:hit()
-    spr(Game.timer%2*289)
-    spr(Game.timer%2*291)
-end
-
 local PlayerTank=Tank:new({x=Game.player_generation_location_x,
                             y=Game.player_generation_location_y,
                             moving_v=false,
