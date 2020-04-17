@@ -40,7 +40,9 @@ Game={
         {x=90,y=0},
         {x=120,y=0},
     },
-    bullets={}
+    bullets={},
+    tank_models={257,259,261,263,},
+    player_model=393,
 }
 
 local Movable={
@@ -52,6 +54,7 @@ local Movable={
     rotate=0,
     size=0,-- as w always equals h
     explosion_timestamp=0,
+    is_explosive=false,
 }
 
 function Movable:new(obj)
@@ -74,11 +77,16 @@ local function mapType(cell_x, cell_y)
     if mget(cell_x, cell_y) == 33+2 then return 3 end -- bush
     if mget(cell_x, cell_y) == 33+3 then return 4 end -- water
     if mget(cell_x, cell_y) == 33+4 then return 5 end -- bullet
+    if mget(cell_x, cell_y) == 33+4 then return 5 end -- tanks
 end
 
 local function isSolid(x,y)
     return mapType((x)//8,(y)//8)~=0 and mapType((x)//8,(y)//8)~=3
 end
+
+local function isExplodable(x,y)
+    local result=mget((x)//8,(y)//8)
+    return result>=385 and result<=451 or result==33 end
 
 local function enemy_updater(stage) -- tables are passed by reference
     for id,enemy in pairs(stage.enemy_container) do
@@ -112,7 +120,7 @@ local function stage_builder(current_stage)
 end
 
 -- classes
-local Bullet=Movable:new({size=8})
+local Bullet=Movable:new({size=8,is_explosive=true,exploding=true,explodable_coordinates={}})
 
 function Bullet:new(obj)
     local bullet=obj or {}
@@ -126,13 +134,22 @@ function Bullet:dir_to_speed()
     self.vy=Game.movement_patterns[self.direction+1].y
 end
 
+function Bullet:explode()
+    -- explode an adjacent tile of the same type
+    for _,tile in pairs(self.explodable_coordinates) do
+        mset((tile.x)//8, (tile.y)//8,0)
+    end
+end
+
 function Bullet:update(id)
     if self:collision_ahead() then
         self.vx=0
         self.vy=0
-        if self.explosion_timestamp==0 then
+        if self.explosion_timestamp==0 then --move to explode
         self.explosion_timestamp=Game.time end
     else spr(329,self.x,self.y,0,1,0,self.rotate,1,1) end
+
+    if self.exploding==true then self:explode();self.exploding=false end
     --id x y alpha scale flip rotate w h
     if self.explosion_timestamp~=0 and Game.time-self.explosion_timestamp<20 then
         local offset1=self.size
@@ -146,14 +163,14 @@ function Bullet:update(id)
         else
             spr(321+Game.time%20//10*2,self.x-offset1,self.y-offset1+offset2,0,1,0,self.rotate,2,2)
         end
-    elseif Game.time-self.explosion_timestamp>=60 and self.explosion_timestamp~=0 then
+    elseif Game.time-self.explosion_timestamp>=20 and self.explosion_timestamp~=0 then
         table.remove(Game.bullets,id) end
     self.x=self.x+self.vx
     self.y=self.y+self.vy
 end
 
 local Tank=Movable:new({
-    id=257,
+    id=Game.player_model,
     lifetime=999,
     shoot_interval=5,
     created_at=0,
@@ -194,11 +211,21 @@ function Movable:collision_ahead() --arrow key code
         --facing up, test corner_a and corner_b
         local next_x=corner_a.x+vx
         local next_y=corner_a.y+vy
+        if self.is_explosive and isExplodable(next_x,next_y) then
+            local temp={x=next_x,y=next_y}
+            self.exploding=true
+            table.insert(self.explodable_coordinates, #self.explodable_coordinates+1,temp)
+        end
         if next_x<0 or next_y<0 then return true end
         result_a=isSolid(next_x,next_y)
     else
         local next_x=corner_d.x+vx
         local next_y=corner_d.y+vy
+        if self.is_explosive and isExplodable(next_x,next_y) then
+            local temp={x=next_x,y=next_y}
+            self.exploding=true
+            table.insert(self.explodable_coordinates, #self.explodable_coordinates+1,temp)
+        end
         if next_x>Game.screen_width or next_y>Game.screen_height then
             return true end
         result_a=isSolid(next_x,next_y)
@@ -208,10 +235,20 @@ function Movable:collision_ahead() --arrow key code
         local next_x=corner_b.x+vx
         local next_y=corner_b.y+vy
         result_b=isSolid(next_x,next_y)
+        if self.is_explosive and isExplodable(next_x,next_y) then
+            local temp={x=next_x,y=next_y}
+            self.exploding=true
+            table.insert(self.explodable_coordinates, #self.explodable_coordinates+1,temp)
+        end
         return result_a or result_b
     else local next_x=corner_c.x+vx
         local next_y=corner_c.y+vy
         result_b=isSolid(next_x,next_y)
+        if self.is_explosive and isExplodable(next_x,next_y) then
+            local temp={x=next_x,y=next_y}
+            self.exploding=true
+            table.insert(self.explodable_coordinates, #self.explodable_coordinates+1,temp)
+        end
         return result_a or result_b
     end
 end
@@ -223,10 +260,10 @@ function PlayerTank:update()
         spr(481+self.lifetime//10*2,self.x,self.y,0,1,0,self.rotate,2,2)
 
     elseif self.lifetime<3*60 then
-        spr(257,self.x,self.y,6,1,0,self.rotate,2,2)
+        spr(Game.player_model,self.x,self.y,6,1,0,self.rotate,2,2)
         spr(Game.time%2*2+289,self.x,self.y,0,1,0,self.rotate,2,2)
 
-    else spr(257,self.x,self.y,6,1,0,self.rotate,2,2) end
+    else spr(Game.player_model,self.x,self.y,6,1,0,self.rotate,2,2) end
     --id x y alpha scale flip rotate w h 
 
     if (btn(1) or btn(0)) and self.moving_h==false then
