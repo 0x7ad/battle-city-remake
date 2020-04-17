@@ -77,8 +77,6 @@ local function mapType(cell_x, cell_y)
 end
 
 local function isSolid(x,y)
-    print(mapType((x)//8,(y)//8)~=0 and mapType((x)//8,(y)//8)~=3 and "failed" or "passed",0,88)
-    print("cellx "..(x//8).."celly"..(y//8),0,97)
     return mapType((x)//8,(y)//8)~=0 and mapType((x)//8,(y)//8)~=3
 end
 
@@ -136,9 +134,18 @@ function Bullet:update(id)
         self.explosion_timestamp=Game.time end
     else spr(329,self.x,self.y,0,1,0,self.rotate,1,1) end
     --id x y alpha scale flip rotate w h
-
-    if Game.time-self.explosion_timestamp<20 then
-        spr(321+Game.time%20//10*2,self.x,self.y,0,1,0,self.rotate,2,2)
+    if self.explosion_timestamp~=0 and Game.time-self.explosion_timestamp<20 then
+        local offset1=self.size
+        local offset2=4 -- to align different sprites
+        if self.direction==1 then
+            spr(321+Game.time%20//10*2,self.x-offset1+offset2,self.y,0,1,0,self.rotate,2,2)
+        elseif self.direction==3 then
+            spr(321+Game.time%20//10*2,self.x,self.y-offset1+offset2,0,1,0,self.rotate,2,2)
+        elseif self.direction==0 then
+            spr(321+Game.time%20//10*2,self.x-offset1+offset2,self.y-offset1,0,1,0,self.rotate,2,2)
+        else
+            spr(321+Game.time%20//10*2,self.x-offset1,self.y-offset1+offset2,0,1,0,self.rotate,2,2)
+        end
     elseif Game.time-self.explosion_timestamp>=60 and self.explosion_timestamp~=0 then
         table.remove(Game.bullets,id) end
     self.x=self.x+self.vx
@@ -280,11 +287,9 @@ function PlayerTank:update()
         table.insert(Game.bullets,#Game.bullets+1,bullet)
     end
 
-    print(self.vy,8,65);print(self.vx,0,65)
     self:dir_to_rotate()
     self.x=self.x+self.vx
     self.y=self.y+self.vy
-    print("vx:"..self.vx.." vy:"..self.vy,0,47)
 end
 
 local function newEnemy (model)
