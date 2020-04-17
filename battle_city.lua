@@ -37,9 +37,32 @@ Game={
         {x=60,y=0},
         {x=90,y=0},
         {x=120,y=0},
-    }
+    },
+    bullets={}
 }
 
+local Asset={
+    x=0,
+    y=0,
+    vx=0,
+    vy=0,
+    direction=0,
+    rotate=0,
+}
+
+function Asset:new(obj)
+    local asset=obj or {}
+    setmetatable(asset,self)
+    self.__index=self
+    return asset
+end
+
+function Asset:dir_to_rotate()
+    if self.direction==1 then self.rotate=2
+    elseif self.direction==2 then self.rotate=3
+    elseif self.direction==3 then self.rotate=1
+    elseif self.direction==0 then self.rotate=0 end
+end
 local function mapType(cell_x, cell_y)
     if mget(cell_x, cell_y) == 0+0 then return 0 end -- empty
     if mget(cell_x, cell_y) == 33+0 then return 1 end -- brick
@@ -105,7 +128,30 @@ local function newBullet(x,y,direction)
         end,
     }
 end
-local Tank={
+
+local Bullet=Asset:new()
+
+function Bullet:new(obj)
+    local bullet=obj or {}
+    setmetatable(bullet,self)
+    self.__index=self
+    return bullet
+end
+
+function Bullet:dir_to_speed()
+    self.vx=Game.movement_patterns[self.direction+1].x
+    self.vy=Game.movement_patterns[self.direction+1].y
+end
+
+function Bullet:update()
+    spr(329,self.x,self.y,0,1,0,self.rotate,1,1)
+        --id x y alpha scale flip rotate w h 
+    self.x=self.x+self.vx
+    self.y=self.y+self.vy
+    print("bullet vx: "..self.vx.." vy: "..self.vy)
+end
+
+local Tank=Asset:new({
     id=257,
     lifetime=999,
     shoot_interval=5,
@@ -119,7 +165,7 @@ local Tank={
     movement=Game.movement_patterns[math.random(1,4)],
     -- shooting_range=10,
     size=16, --both length or width
-}
+})
 function Tank:new(obj)
     local tank=obj or {}
     setmetatable(tank,self)
@@ -140,9 +186,8 @@ function Tank:hit()
     spr(Game.timer%2*291)
 end
 
-PlayerTank=Tank:new({create_location_x=10,
+local PlayerTank=Tank:new({create_location_x=10,
                     create_location_y=15,
-                    rotate=0,
                     moving_v=false,
                     moving_h=false,})
 function PlayerTank:timer()
@@ -208,13 +253,6 @@ function Tank:collision_ahead() --arrow key code
     end
 end
 
-function PlayerTank:dir_to_rotate()
-    if self.direction==1 then self.rotate=2
-    elseif self.direction==2 then self.rotate=3
-    elseif self.direction==3 then self.rotate=1
-    elseif self.direction==0 then self.rotate=0 end
-end
-
 function PlayerTank:update()
     self:timer()
     -- visual effect
@@ -252,6 +290,39 @@ function PlayerTank:update()
             self.moving_h=true end
         if self:collision_ahead() then self.vx=0 end
     else self.vx=0;self.moving_h=false end
+
+    if btnp(4) then
+        local temp={}
+        if self.direction==0 then
+            temp={
+                x=self.x+5,
+                y=self.y,
+                direction=self.direction
+            }
+        elseif self.direction==1 then
+            temp={
+                x=self.x+5,
+                y=self.y+15,
+                direction=self.direction
+            }
+        elseif self.direction==2 then
+            temp={
+                x=self.x,
+                y=self.y+5,
+                direction=self.direction
+            }
+        elseif self.direction==3 then
+            temp={
+                x=self.x+15,
+                y=self.y+5,
+                direction=self.direction
+            }
+        end
+        local bullet=Bullet:new(temp)
+        bullet:dir_to_rotate()
+        bullet:dir_to_speed()
+        table.insert(Game.bullets,#Game.bullets+1,bullet)
+    end
 
     print(self.vy,8,65);print(self.vx,0,65)
     self:dir_to_rotate()
@@ -357,6 +428,10 @@ function TIC()
             Game.player=PlayerTank:new()
             Game.player_count=Game.player_count+1
         else Game.player:update() end --WARNING call a method using : instead of dot
+        
+        for id,bullet in pairs(Game.bullets) do
+            bullet:update()
+        end
         --[[
         if Game.stage.enemy_created~=Game.stage.enemy and
         (Game.time-Game.stage.timer)//120==0 then
