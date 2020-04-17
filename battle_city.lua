@@ -140,7 +140,11 @@ function Tank:hit()
     spr(Game.timer%2*291)
 end
 
-PlayerTank=Tank:new({create_location_x=10,create_location_y=15,rotate=0})
+PlayerTank=Tank:new({create_location_x=10,
+                    create_location_y=15,
+                    rotate=0,
+                    moving_v=false,
+                    moving_h=false,})
 function PlayerTank:generator()
     Game.player = Game.player + 1
 end
@@ -171,25 +175,30 @@ function PlayerTank:dir_to_rotate()
 end
 
 function PlayerTank:update()
-    if btn(1) or btn(0) then
-        if btn(0) then 
-            if not self:collision_ahead() then self.vy=-1 end
+    if (btn(1) or btn(0)) and self.moving_h==false then
+        if btnp(0) then
+            self.vy=-1
             self.direction=0
-        elseif btn(1) then
-            if not self:collision_ahead() then self.vy=1 end
-            self.direction=1 end
-        self.vx=0
-    else self.vy=0 end
+            self.moving_v=true
+        elseif btnp(1) then
+            self.vy=1
+            self.direction=1
+            self.moving_v=true end
 
-    if btn(2) or btn(3) then
-        if btn(2) then
-            if not self:collision_ahead() then self.vx=-1 end
+        if self:collision_ahead() then self.vy=0 end
+    else self.vy=0;self.moving_v=false end
+
+    if (btn(2) or btn(3)) and self.moving_v==false then
+        if btnp(2) then
+            self.vx=-1
             self.direction=2
-        elseif btn(3) then
-            if not self:collision_ahead() then self.vx=1 end
-            self.direction=3 end
-        self.vy=0
-    else self.vx=0 end
+            self.moving_h=true
+        elseif btnp(3) then
+            self.vx=1
+            self.direction=3
+            self.moving_h=true end
+        if self:collision_ahead() then self.vx=0 end
+    else self.vx=0;self.moving_h=false end
 
     print(self.vy,8,65);print(self.vx,0,65)
     self:dir_to_rotate()
