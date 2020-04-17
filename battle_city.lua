@@ -52,7 +52,6 @@ end
 local function isSolid(x,y)
     print(mapType((x)//8,(y)//8)~=0 and mapType((x)//8,(y)//8)~=3 and "failed" or "passed",0,88)
     print("cellx "..(x//8).."celly"..(y//8),0,97)
-    print("x "..x.."y"..y,0,106)
     return mapType((x)//8,(y)//8)~=0 and mapType((x)//8,(y)//8)~=3
 end
 
@@ -149,22 +148,61 @@ function PlayerTank:generator()
     Game.player = Game.player + 1
 end
 
-function PlayerTank:collision_ahead() --arrow key code
+function Tank:collision_ahead() --arrow key code
     local direction=self.direction
-    local x=Game.movement_patterns[direction+1].x
-    local y=Game.movement_patterns[direction+1].y
-    local next_x=self.x+x
-    local next_y=self.y+y
-    rect(next_x,next_y,8,8,4)
-    print("mx:"..x.."; my:"..y,0,3)
-    print("cx: "..self.x.."; cy: "..self.y,0,11)
-    print("mget id: "..mget(self.x+x,self.y+y),0,20)
-    print(isSolid(next_x,next_y) and "solid" or "not solid",0,29)
-    return isSolid(next_x,next_y) or
-            next_x<0 or -- boundaries
-            next_y<0 or
-            next_x>Game.screen_width or
-            next_y>Game.screen_height
+    local result_a=false
+    local result_b=false
+    local corner_a={x=self.x,y=self.y} --top left 0 and 2
+    local corner_b={x=self.x+15,y=self.y} -- top right 0 and 3
+    local corner_c={x=self.x,y=self.y+15} -- bottom left 2 and 1
+    local corner_d={x=self.x+15,y=self.y+15} --bottom right 1 and 3
+    local vx=Game.movement_patterns[direction+1].x
+    local vy=Game.movement_patterns[direction+1].y
+    print("speed x:"..vx.."; y:"..vy,0,3)
+    print("current x: "..self.x.."; cy: "..self.y,0,11)
+    print("mget id: "..mget(self.x+vx,self.y+vy),0,20)
+    if direction==0 or direction==2 then
+        --facing up, test corner_a and corner_b
+        local next_x=corner_a.x+vx
+        local next_y=corner_a.y+vy
+        if next_x<0 or next_y<0 then return true end
+        result_a=isSolid(next_x,next_y)
+        print(isSolid(next_x,next_y) and "solid" or "not solid",0,29)
+        print("checking x1: "..next_x.."y1: "..next_y,0,38)
+        print("dir: "..self.direction,60,29)
+        rect(next_x,next_y,1,1,3)
+    else
+        local next_x=corner_d.x+vx
+        local next_y=corner_d.y+vy
+        if next_x>Game.screen_width or next_y>Game.screen_height then
+            return true end
+        result_a=isSolid(next_x,next_y)
+        print(isSolid(next_x,next_y) and "solid" or "not solid",0,29)
+        print("checking x1: "..next_x.."y1: "..next_y,0,38)
+        print("dir: "..self.direction,60,29)
+        rect(next_x,next_y,1,1,3)
+    end
+
+    if direction==0 or direction==3 then
+        local next_x=corner_b.x+vx
+        local next_y=corner_b.y+vy
+        result_b=isSolid(next_x,next_y)
+        rect(next_x,next_y,1,1,3)
+        print("checking x2: "..next_x.."y2: "..next_y,0,56)
+        local k=result_a and "true" or "false"
+        local j=result_b and "true" or "false"
+        print("result_a: "..k.."result_b: "..j,0,74)
+        return result_a or result_b
+    else local next_x=corner_c.x+vx
+        local next_y=corner_c.y+vy
+        result_b=isSolid(next_x,next_y)
+        rect(next_x,next_y,1,1,3)
+        print("checking x2: "..next_x.."y2: "..next_y,0,56)
+        local k=result_a and "true" or "false"
+        local j=result_b and "true" or "false"
+        print("result_a: "..k.."result_b: "..j,0,74)
+        return result_a or result_b
+    end
 end
 
 function PlayerTank:dir_to_rotate()
@@ -204,8 +242,6 @@ function PlayerTank:update()
     self:dir_to_rotate()
     self.x=self.x+self.vx
     self.y=self.y+self.vy
-    local result=self:collision_ahead() and "can't pass" or "passed"
-    print("check"..result,0,38)
     print("vx:"..self.vx.." vy:"..self.vy,0,47)
     -- visual effect
     if self.lifetime<30 then
@@ -215,7 +251,6 @@ function PlayerTank:update()
         spr(257,self.x,self.y,6,1,0,self.rotate,2,2)
         spr(Game.time%2*289,self.x,self.y,6,1,0,self.rotate,2,2)
     else spr(257,self.x,self.y,6,1,0,self.rotate,2,2)
-        rectb(self.x,self.y,1,1,4)
         --id x y alpha scale flip rotate w h
     end
 end
