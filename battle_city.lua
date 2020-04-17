@@ -109,8 +109,9 @@ local Tank={
     id=257,
     lifetime=999,
     shoot_interval=5,
-    created_at=Game.time,
-    direction=Game.time%3; -- rotate parameter for spr
+    created_at=0,
+    can_move=false,
+    direction=0; -- rotate parameter for spr
     x=0,
     y=0,
     vx=0,
@@ -144,8 +145,10 @@ PlayerTank=Tank:new({create_location_x=10,
                     rotate=0,
                     moving_v=false,
                     moving_h=false,})
-function PlayerTank:generator()
-    Game.player = Game.player + 1
+function PlayerTank:timer()
+    if self.created_at==0 then 
+        self.created_at=Game.time 
+    else self.lifetime=Game.time-self.created_at end
 end
 
 function Tank:collision_ahead() --arrow key code
@@ -213,6 +216,18 @@ function PlayerTank:dir_to_rotate()
 end
 
 function PlayerTank:update()
+    self:timer()
+    -- visual effect
+    if self.lifetime<=70 then --it takes 10*7 frames to finish
+        spr(481+self.lifetime//10*2,self.x,self.y,0,1,0,self.rotate,2,2)
+
+    elseif self.lifetime<3*60 then
+        spr(257,self.x,self.y,6,1,0,self.rotate,2,2)
+        spr(Game.time%2*2+289,self.x,self.y,0,1,0,self.rotate,2,2)
+
+    else spr(257,self.x,self.y,6,1,0,self.rotate,2,2) end
+    --id x y alpha scale flip rotate w h 
+
     if (btn(1) or btn(0)) and self.moving_h==false then
         if btnp(0) then
             self.vy=-1
@@ -243,16 +258,6 @@ function PlayerTank:update()
     self.x=self.x+self.vx
     self.y=self.y+self.vy
     print("vx:"..self.vx.." vy:"..self.vy,0,47)
-    -- visual effect
-    if self.lifetime<30 then
-        for i=0,8 do
-            spr(481+i,self.x,self.y) end
-    elseif self.lifetime<90 then
-        spr(257,self.x,self.y,6,1,0,self.rotate,2,2)
-        spr(Game.time%2*289,self.x,self.y,6,1,0,self.rotate,2,2)
-    else spr(257,self.x,self.y,6,1,0,self.rotate,2,2)
-        --id x y alpha scale flip rotate w h
-    end
 end
 
 local function newTank(model)
