@@ -56,6 +56,8 @@ Stage={
     enemy_count=1,
     finishing_timestamp=0,
     finished=false,
+    tank_coordinates={},--1 for player
+    --do not record bullets for now
 }
 
 local Movable={
@@ -186,6 +188,7 @@ local Tank=Movable:new({
     movement=Game.movement_patterns[math.random(1,4)],
     -- shooting_range=10,
     size=16, --both length or width
+    tank_id=0,
 })
 function Tank:new(obj)
     local tank=obj or {}
@@ -199,13 +202,51 @@ local PlayerTank=Tank:new({x=Game.player_generation_location_x,
                             id=Game.player_model,
                             control_sequence={},--to store key sequence
                             moving_v=false,
-                            moving_h=false,})
+                            moving_h=false,
+                            type="player"})
 function Tank:timer()
     if self.created_at==0 then
         self.created_at=Game.time
     else self.lifetime=Game.time-self.created_at end
 end
 
+function Movable:tank_ahead()
+    local other_x=0
+    local other_y=0
+    local tank_size=16
+
+    local result=false
+
+    for _,tank in pairs(Stage.tank_coordinates) do
+        if tank[1]~=self.tank_id then
+            other_x=tank[2].x
+            other_y=tank[2].y
+            result=(self.x+self.size>=other_x and
+                    self.x<=other_x+tank_size and
+                    self.y+self.size>=other_y and
+                    self.y<=other_y+tank_size)
+            if result==true then return result end
+        end
+    end
+    return false
+end
+
+function Movable:register_coordinate()
+    local coordinates={x=self.x,y=self.y}
+    if self.type=="player" then
+        local tank={self.tank_id,coordinates}
+        table.remove(Stage.tank_coordinates,1)
+        table.insert(Stage.tank_coordinates,1,tank)
+    elseif self.type=="enemy" then
+        for i,tank in pairs(Stage.tank_coordinates) do
+            if tank[1]==self.tank_id then
+                local enemy={self.tank_id,coordinates}
+                table.remove(Stage.tank_coordinates,i)
+                table.insert(Stage.tank_coordinates,i,enemy)
+            end
+        end
+    end
+end
 function Movable:collision_ahead() --arrow key code
     local direction=self.direction
     local result_a=false
@@ -277,7 +318,8 @@ end
 
 function PlayerTank:update()
     self:timer()
-    self:animate()   
+    self:animate()
+    print(#Stage.tank_coordinates)
     if self.lifetime>self.animation_time then
 
         local temp_dir=0
@@ -301,10 +343,11 @@ function PlayerTank:update()
         else
             self.direction=self.control_sequence[#self.control_sequence]
             self:dir_to_rotate()
-            if not self:collision_ahead() then
+            if not self:collision_ahead() and not self:tank_ahead() then
                 self:dir_to_speed()
                 self.x=self.x+self.vx
                 self.y=self.y+self.vy
+                self:register_coordinate()
             end
         end
     
@@ -321,7 +364,7 @@ function PlayerTank:update()
     end
 end
 
-local EnemyTank=Tank:new({id=385})
+local EnemyTank=Tank:new({id=385,type="enemy"})
 
 function Tank:shoot()
     if self.flying_bullets>2 then self.cd_mode=true end
@@ -435,7 +478,7 @@ function EnemyTank:update()
     self:timer()
     self:animate()
     if self.lifetime>self.animation_time then
-        if self:collision_ahead() then
+        if self:collision_ahead() or self:tank_ahead() then
             self.vx=0;self.vy=0
             self.possible_directions[self.direction+1]=1
             self:selectpath()
@@ -444,6 +487,7 @@ function EnemyTank:update()
             self.x=self.x+self.vx
             self.y=self.y+self.vy
             self.possible_directions={0,0,0,0}
+            self:register_coordinate()
         end
 
         if Game.time-self.created_at>2*60 then
@@ -465,10 +509,13 @@ local function create_enemy()
             direction=temp_dir,
             possible_directions={0,0,0,0},
             created_at=Game.time,
-            last_shoot=0
+            last_shoot=0,
+            tank_id=#Stage.enemy_container+2,
         })
         enemy:dir_to_rotate()
         table.insert(Stage.enemy_container,#Stage.enemy_container+1,enemy)
+        local coordinate={enemy.tank_id,{x=enemy.x,y=enemy.y}}
+        table.insert(Stage.tank_coordinates,#Stage.tank_coordinates+1,coordinate)
     end
 end
 
@@ -526,6 +573,8 @@ function TIC()
 
         if Game.player_count==0 then  -- once only, create player tank
             Game.player=PlayerTank:new()
+            local coordinate={Game.player.tank_id,{x=Game.player.x,y=Game.player.y}}
+            table.insert(Stage.tank_coordinates,#Stage.tank_coordinates+1,coordinate)
             Game.player_count=Game.player_count+1
         else Game.player:update() end --WARNING call a method using : instead of dot
         
