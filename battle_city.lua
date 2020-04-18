@@ -44,6 +44,12 @@ Game={
     --tank_models={257,259,261,263,},
     player_model=200,
     control_stack={},--store the sequence of key presses
+    dynamic_content_coordinates={
+        {-- for the first stage
+            {1,{minx=2,maxx=4}}, --for the first row
+            {3,{minx=2,maxx=4}}, --for the third row
+        },
+    }
 }
 
 Stage={
@@ -364,6 +370,14 @@ local function newStage(stage_number)
     }
 end
 
+local function content_generator()
+    for _,row in pairs(Game.dynamic_content_coordinates[Game.current_stage]) do
+            for y=row[2].minx,row[2].maxx do
+                spr(35,row[1]*8,y*8,0)
+            end
+    end
+end
+
 function TIC()
     if Game.mode==0 then
         cls(0)
@@ -413,6 +427,8 @@ function TIC()
         if #Stage.enemy_container==0 and Game.time-Stage.finishing_timestamp>30 and Stage.finished then
             Game.mode=3
         end
+
+        content_generator()
 
     elseif Game.mode==3 then --summary page
         cls()
