@@ -334,35 +334,37 @@ function EnemyTank:new(obj)
     return enemy
 end
 
-function EnemyTank:update()
+function EnemyTank:selectpath()
+    local h_blocked=false
+    local v_blocked=false
+    if self.possible_directions[0]==1 or self.possible_directions[1]==1 then h_blocked=true end
+    if self.possible_directions[2]==1 or self.possible_directions[3]==1 then v_blocked=true end
 
+    if v_blocked and h_blocked then
+        local fewer_possible_way={}
+        for key,dir in pairs(self.possible_directions) do
+            if dir==1 then
+                table.insert(fewer_possible_way,#fewer_possible_way,key)
+            end
+        end
+        if #fewer_possible_way==2 then
+            local option=math(1,2)
+            self.direction=fewer_possible_way[option]
+        elseif #fewer_possible_way==1 then
+            self.direction=fewer_possible_way[1]
+        end
+    end
+
+    if self.direction==0 or self.direction==1 then
+        self.direction=math.random(2,3)
+    else self.direction=math.random(0,1) end
+end
+
+function EnemyTank:update()
     if self:collision_ahead() then
         self.vx=0;self.vy=0
         self.possible_directions[self.direction+1]=1
-
-        local h_blocked=false
-        local v_blocked=false
-        if self.possible_directions[0]==1 or self.possible_directions[1]==1 then h_blocked=true end
-        if self.possible_directions[2]==1 or self.possible_directions[3]==1 then v_blocked=true end
-
-        if v_blocked and h_blocked then
-            local fewer_possible_way={}
-            for key,dir in pairs(self.possible_directions) do
-                if dir==1 then
-                    table.insert(fewer_possible_way,#fewer_possible_way,key)
-                end
-            end
-            if #fewer_possible_way==2 then
-                local option=math(1,2)
-                self.direction=fewer_possible_way[option]
-            elseif #fewer_possible_way==1 then
-                self.direction=fewer_possible_way[1]
-            end
-        end
-
-        if self.direction==0 or self.direction==1 then
-            self.direction=math.random(2,3)
-        else self.direction=math.random(0,1) end
+        self:selectpath()
         self:dir_to_speed();self:dir_to_rotate() end
 
     spr(192,self.x,self.y,6,1,0,self.rotate,2,2)
