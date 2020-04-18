@@ -10,6 +10,7 @@ Game={
     time=0,
     player_generation_location_x=10,
     player_generation_location_y=12,
+    destruction_animation_time=1*60,
     screen_rows=17,
     screen_columns=30,
     screen_width=240,
@@ -58,6 +59,8 @@ Stage={
     finished=false,
     tank_coordinates={},--1 for player
     --do not record bullets for now
+    destruction_waitlist={},
+    destructed_tank_count=0,
 }
 
 local Movable={
@@ -124,6 +127,7 @@ local Bullet=Movable:new({
     is_explosive=true,
     exploding=true,
     explodable_coordinates={},
+    type="bullet",
 })
 
 function Bullet:new(obj)
@@ -146,7 +150,7 @@ function Bullet:explode()
 end
 
 function Bullet:update(id)
-    if self:collision_ahead() then
+    if self:collision_ahead() or self:tank_ahead() then 
         self.vx=0
         self.vy=0
         if self.explosion_timestamp==0 then --move to explode
@@ -175,6 +179,7 @@ end
 local Tank=Movable:new({
     id=0,
     lifetime=0,
+    destruction_timestamp=0,
     animation_time=2*60,
     shoot_interval_cd=1*60,
     shoot_interval=0.3*60,
@@ -189,6 +194,7 @@ local Tank=Movable:new({
     -- shooting_range=10,
     size=16, --both length or width
     tank_id=0,
+    destructed=false,
 })
 function Tank:new(obj)
     local tank=obj or {}
@@ -213,27 +219,50 @@ end
 function Movable:tank_ahead()
     local other_x=0
     local other_y=0
-    local tank_size=16
     local direction=self.direction
     local vx=Game.movement_patterns[direction+1].x*2 -- in case two tanks run toward each other
     local vy=Game.movement_patterns[direction+1].y*2
+    local temp_tank_id=0
 
     local result=false
 
     for _,tank in pairs(Stage.tank_coordinates) do
-        print("from x: "..self.x.." y: "..self.y,0,self.tank_id*9)
-        if tank[1]~=self.tank_id then
-            other_x=tank[2].x
-            other_y=tank[2].y
-            print("testing x: "..other_x.." y: "..other_y,100,self.tank_id*9)
-            if self.direction==0 then
-                if self.y+vy<=other_y+(tank_size-1) and not (self.x>other_x+(tank_size-1) or self.x+(tank_size-1)<other_x) then result=true end
+        other_x=tank[2].x
+        other_y=tank[2].y
+        if self.type=="player" or self.type=="enemy" then
+            if tank[1]~=self.tank_id then
+                if self.direction==0 then--
+                    if not (self.y+vy<other_y+(self.size-1)) and not (self.y+vy+(self.size-1)<other_y) and not (self.x>other_x+(self.size-1) or self.x+(self.size-1)<other_x) then result=true;break end
+                elseif self.direction==1 then
+                    if self.y+vy+(self.size-1)>=other_y and not (self.y+vy>other_y+(self.size-1)) and not (self.x>other_x+(self.size-1) or self.x+(self.size-1)<other_x) then result=true;break end
+                elseif self.direction==2 then--
+                    if not (self.x+vx<other_x+(self.size-1)) and not (self.x+(self.size-1)+vx<other_x) and not (self.y>other_y+(self.size-1) or self.y+(self.size-1)<other_y) then result=true;break end
+                elseif self.direction==3 then
+                    if self.x+vx+(self.size-1)>=other_x and not (self.x+vx>other_x+(self.size-1)) and not (self.y>other_y+(self.size-1) or self.y+(self.size-1)<other_y) then result=true;break end
+                end
+            end
+        end
+        if self.type=="bullet" then-- i am a bullet and i am approaching a tank
+            temp_tank_id=tank[1]
+            if self.direction==0 then--
+                if not (self.y+vy<other_y+(self.size-1)) and not (self.y+vy+(self.size-1)<other_y) and not (self.x>other_x+(self.size-1) or self.x+(self.size-1)<other_x) then result=true;break end
             elseif self.direction==1 then
-                if self.y+vy+(tank_size-1)>=other_y and not (self.x>other_x+(tank_size-1) or self.x+(tank_size-1)<other_x) then result=true end
-            elseif self.direction==2 then
-                if self.x+vx<=other_x+(tank_size-1) and not (self.y>other_y+(tank_size-1) or self.y+(tank_size-1)<other_y) then result=true end
+                if self.y+vy+(self.size-1)>=other_y and not (self.y+vy>other_y+(self.size-1)) and not (self.x>other_x+(self.size-1) or self.x+(self.size-1)<other_x) then result=true;break end
+            elseif self.direction==2 then--
+                if not (self.x+vx<other_x+(self.size-1)) and not (self.x+(self.size-1)+vx<other_x) and not (self.y>other_y+(self.size-1) or self.y+(self.size-1)<other_y) then result=true;break end
             elseif self.direction==3 then
-                if self.x+vx+(tank_size-1)>=other_x and not (self.y>other_y+(tank_size-1) or self.y+(tank_size-1)<other_y) then result=true end
+                if self.x+vx+(self.size-1)>=other_x and not (self.x+vx>other_x+(self.size-1)) and not (self.y>other_y+(self.size-1) or self.y+(self.size-1)<other_y) then result=true;break end
+            end
+        end
+    end
+
+    if result==true and self.type=="bullet" then
+        self.exploding=true
+        --table.insert(self.hit_tanks, #self.hit_tanks+1,temp_tank_id) --add to hit_tanks
+        for _,tank in pairs(Stage.enemy_container) do
+            if temp_tank_id==tank.id and tank.destructed==false then
+                tank.destruction_timestamp=Game.time
+                tank.destructed=true
             end
         end
     end
@@ -346,8 +375,12 @@ function Tank:animate()
         spr(self.id,self.x,self.y,6,1,0,self.rotate,2,2)
         spr(Game.time%2*2+289,self.x,self.y,0,1,0,self.rotate,2,2)
 
-    else spr(self.id,self.x,self.y,6,1,0,self.rotate,2,2) end
+    elseif not self.destructed then
+        spr(self.id,self.x,self.y,6,1,0,self.rotate,2,2)
     --id x y alpha scale flip rotate w h 
+    elseif self.destructed and Game.time-self.destruction_timestamp<Game.destruction_animation_time and self.destruction_timestamp~=0 then
+        spr(325,self.x,self.y,0,1,0,self.rotate,4,4)
+    end
 end
 
 function PlayerTank:update()
@@ -617,9 +650,10 @@ function TIC()
         end
 
         create_enemy()
-
         for id,enemy in pairs(Stage.enemy_container) do
-            enemy:update(id)
+            if enemy.destruction_timestamp==0 or (enemy.destruction_timestamp~=0 and Game.time-enemy.destruction_timestamp<Game.destruction_animation_time) then
+                enemy:update(id)
+            end
         end
 
         if #Stage.enemy_container==0 and Game.time-Stage.finishing_timestamp>30 and Stage.finished then
