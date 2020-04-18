@@ -214,21 +214,30 @@ function Movable:tank_ahead()
     local other_x=0
     local other_y=0
     local tank_size=16
+    local direction=self.direction
+    local vx=Game.movement_patterns[direction+1].x*2 -- in case two tanks run toward each other
+    local vy=Game.movement_patterns[direction+1].y*2
 
     local result=false
 
     for _,tank in pairs(Stage.tank_coordinates) do
+        print("from x: "..self.x.." y: "..self.y,0,self.tank_id*9)
         if tank[1]~=self.tank_id then
             other_x=tank[2].x
             other_y=tank[2].y
-            result=(self.x+self.size>=other_x and
-                    self.x<=other_x+tank_size and
-                    self.y+self.size>=other_y and
-                    self.y<=other_y+tank_size)
-            if result==true then return result end
+            print("testing x: "..other_x.." y: "..other_y,100,self.tank_id*9)
+            if self.direction==0 then
+                if self.y+vy<=other_y+(tank_size-1) and not (self.x>other_x+(tank_size-1) or self.x+(tank_size-1)<other_x) then result=true end
+            elseif self.direction==1 then
+                if self.y+vy+(tank_size-1)>=other_y and not (self.x>other_x+(tank_size-1) or self.x+(tank_size-1)<other_x) then result=true end
+            elseif self.direction==2 then
+                if self.x+vx<=other_x+(tank_size-1) and not (self.y>other_y+(tank_size-1) or self.y+(tank_size-1)<other_y) then result=true end
+            elseif self.direction==3 then
+                if self.x+vx+(tank_size-1)>=other_x and not (self.y>other_y+(tank_size-1) or self.y+(tank_size-1)<other_y) then result=true end
+            end
         end
     end
-    return false
+    return result
 end
 
 function Movable:register_coordinate()
@@ -319,7 +328,7 @@ end
 function PlayerTank:update()
     self:timer()
     self:animate()
-    print(#Stage.tank_coordinates)
+    self:register_coordinate()
     if self.lifetime>self.animation_time then
 
         local temp_dir=0
@@ -343,11 +352,10 @@ function PlayerTank:update()
         else
             self.direction=self.control_sequence[#self.control_sequence]
             self:dir_to_rotate()
-            if not self:collision_ahead() and not self:tank_ahead() then
+            if (not self:collision_ahead()) and (not self:tank_ahead()) then
                 self:dir_to_speed()
                 self.x=self.x+self.vx
                 self.y=self.y+self.vy
-                self:register_coordinate()
             end
         end
     
@@ -438,6 +446,7 @@ function Tank:shoot()
         bullet:dir_to_speed()
         table.insert(Game.bullets,#Game.bullets+1,bullet)
         self.last_shoot=Game.time
+        --if Game.time-self.last_shoot>1*60 then self.flying_bullets=self.flying_bullets+1 end
         self.flying_bullets=self.flying_bullets+1
     end
 end
@@ -477,6 +486,7 @@ end
 function EnemyTank:update()
     self:timer()
     self:animate()
+    self:register_coordinate()
     if self.lifetime>self.animation_time then
         if self:collision_ahead() or self:tank_ahead() then
             self.vx=0;self.vy=0
@@ -487,7 +497,6 @@ function EnemyTank:update()
             self.x=self.x+self.vx
             self.y=self.y+self.vy
             self.possible_directions={0,0,0,0}
-            self:register_coordinate()
         end
 
         if Game.time-self.created_at>2*60 then
