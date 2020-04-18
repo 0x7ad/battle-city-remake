@@ -260,12 +260,19 @@ function Movable:collision_ahead() --arrow key code
     local direction=self.direction
     local result_a=false
     local result_b=false
+    local result_c=false
     local corner_a={x=self.x,y=self.y} --top left 0 and 2
     local corner_b={x=self.x+self.size-1,y=self.y} -- top right 0 and 3
     local corner_c={x=self.x,y=self.y+self.size-1} -- bottom left 2 and 1
     local corner_d={x=self.x+self.size-1,y=self.y+self.size-1} --bottom right 1 and 3
+    local middle_ab={x=self.x+(self.size-1)//2,y=self.y}
+    local middle_cd={x=self.x+(self.size-1)//2,y=self.y+(self.size-1)}
+    local middle_ac={x=self.x,y=self.y+(self.size-1)//2}
+    local middle_bd={x=self.x+(self.size-1),y=self.y+(self.size-1)//2}
     local vx=Game.movement_patterns[direction+1].x
     local vy=Game.movement_patterns[direction+1].y
+    local middle_x=0
+    local middle_y=0
     if direction==0 or direction==2 then
         --facing up, test corner_a and corner_b
         local next_x=corner_a.x+vx
@@ -299,7 +306,6 @@ function Movable:collision_ahead() --arrow key code
             self.exploding=true
             table.insert(self.explodable_coordinates, #self.explodable_coordinates+1,temp)
         end
-        return result_a or result_b
     else local next_x=corner_c.x+vx
         local next_y=corner_c.y+vy
         result_b=isSolid(next_x,next_y)
@@ -308,8 +314,27 @@ function Movable:collision_ahead() --arrow key code
             self.exploding=true
             table.insert(self.explodable_coordinates, #self.explodable_coordinates+1,temp)
         end
-        return result_a or result_b
     end
+
+    if direction==0 then
+        middle_x=middle_ab.x+vx
+        middle_y=middle_ab.y+vy end
+        
+    if direction==1 then
+        middle_x=middle_cd.x+vx
+        middle_y=middle_cd.y+vy end
+
+    if direction==2 then
+        middle_x=middle_ac.x+vx
+        middle_y=middle_ac.y+vy end
+
+    if direction==3 then
+        middle_x=middle_bd.x+vx
+        middle_y=middle_bd.y+vy end
+
+    result_c=isSolid(middle_x,middle_y)
+
+    return result_a or result_b or result_c
 end
 
 function Tank:animate()
