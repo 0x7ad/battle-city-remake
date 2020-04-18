@@ -43,7 +43,6 @@ Game={
     bullets={},
     --tank_models={257,259,261,263,},
     player_model=200,
-    control_stack={},--store the sequence of key presses
     dynamic_content_coordinates={
         {-- for the first stage
             {1,{minx=2,maxx=4}}, --for the first row
@@ -198,6 +197,7 @@ end
 local PlayerTank=Tank:new({x=Game.player_generation_location_x,
                             y=Game.player_generation_location_y,
                             id=Game.player_model,
+                            control_sequence={},--to store key sequence
                             moving_v=false,
                             moving_h=false,})
 function Tank:timer()
@@ -277,40 +277,47 @@ end
 
 function PlayerTank:update()
     self:timer()
-    self:animate()
-
+    self:animate()   
     if self.lifetime>self.animation_time then
-        if (btn(1) or btn(0)) and self.moving_h==false then
-            if btnp(0) then
-                self.vy=-1
-                self.direction=0
-                self.moving_v=true
-            elseif btnp(1) then
-                self.vy=1
-                self.direction=1
-                self.moving_v=true end
+
+        local temp_dir=0
+        if btnp(0) then
+            temp_dir=0
+            table.insert(self.control_sequence,#self.control_sequence+1,temp_dir)
+        elseif btnp(1) then
+            temp_dir=1
+            table.insert(self.control_sequence,#self.control_sequence+1,temp_dir)
+        elseif btnp(2) then
+            temp_dir=2
+            table.insert(self.control_sequence,#self.control_sequence+1,temp_dir)
+        elseif btnp(3) then
+            temp_dir=3
+            table.insert(self.control_sequence,#self.control_sequence+1,temp_dir)
+        end
+        
+        if #self.control_sequence==0 then
+            self.vx=0
+            self.vy=0
+        else
+            self.direction=self.control_sequence[#self.control_sequence]
+            self:dir_to_rotate()
+            if not self:collision_ahead() then
+                self:dir_to_speed()
+                self.x=self.x+self.vx
+                self.y=self.y+self.vy
+            end
+        end
     
-            if self:collision_ahead() then self.vy=0 end
-        else self.vy=0;self.moving_v=false end
-    
-        if (btn(2) or btn(3)) and self.moving_v==false then
-            if btnp(2) then
-                self.vx=-1
-                self.direction=2
-                self.moving_h=true
-            elseif btnp(3) then
-                self.vx=1
-                self.direction=3
-                self.moving_h=true end
-            if self:collision_ahead() then self.vx=0 end
-        else self.vx=0;self.moving_h=false end
-    
+        for i=0,3 do
+            if not btn(i) then
+                for id,value in pairs(self.control_sequence) do
+                    if value==i then table.remove(self.control_sequence,id) end
+                end
+            end
+        end
         if btnp(4) then
             self:shoot()
         end
-        self:dir_to_rotate()
-        self.x=self.x+self.vx
-        self.y=self.y+self.vy
     end
 end
 
