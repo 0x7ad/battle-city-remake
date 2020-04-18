@@ -117,7 +117,13 @@ local function stage_builder(current_stage)
 end
 
 -- classes
-local Bullet=Movable:new({size=8,is_explosive=true,exploding=true,explodable_coordinates={}})
+local Bullet=Movable:new({
+    size=8,
+    speed=2,
+    is_explosive=true,
+    exploding=true,
+    explodable_coordinates={},
+})
 
 function Bullet:new(obj)
     local bullet=obj or {}
@@ -127,8 +133,8 @@ function Bullet:new(obj)
 end
 
 function Movable:dir_to_speed()
-    self.vx=Game.movement_patterns[self.direction+1].x
-    self.vy=Game.movement_patterns[self.direction+1].y
+    self.vx=Game.movement_patterns[self.direction+1].x*self.speed
+    self.vy=Game.movement_patterns[self.direction+1].y*self.speed
 end
 
 function Bullet:explode()
@@ -168,7 +174,12 @@ end
 local Tank=Movable:new({
     id=Game.player_model,
     lifetime=999,
-    shoot_interval=5,
+    shoot_interval_cd=1*60,
+    shoot_interval=0.3*60,
+    last_shoot=0,
+    speed=1,
+    flying_bullets=0,
+    cd_mode=false,
     created_at=0,
     can_move=false,
     direction=0, -- rotate parameter for spr
@@ -288,6 +299,56 @@ function PlayerTank:update()
     else self.vx=0;self.moving_h=false end
 
     if btnp(4) then
+        self:shoot()
+    end
+    self:dir_to_rotate()
+    self.x=self.x+self.vx
+    self.y=self.y+self.vy
+end
+
+local EnemyTank=Tank:new()
+
+function Tank:shoot()
+    if self.flying_bullets>2 then self.cd_mode=true end
+
+    if self.cd_mode then
+        if Game.time-self.last_shoot>self.shoot_interval_cd then
+            self.cd_mode=false
+
+            local temp={}
+            if self.direction==0 then
+                temp={
+                    x=self.x+5,
+                    y=self.y,
+                    direction=self.direction
+                }
+            elseif self.direction==1 then
+                temp={
+                    x=self.x+3,
+                    y=self.y+15,
+                    direction=self.direction
+                }
+            elseif self.direction==2 then
+                temp={
+                    x=self.x,
+                    y=self.y+3,
+                    direction=self.direction
+                }
+            elseif self.direction==3 then
+                temp={
+                    x=self.x+15,
+                    y=self.y+5,
+                    direction=self.direction
+                }
+            end
+            local bullet=Bullet:new(temp)
+            bullet:dir_to_rotate()
+            bullet:dir_to_speed()
+            table.insert(Game.bullets,#Game.bullets+1,bullet)
+            self.last_shoot=Game.time
+            self.flying_bullets=1
+        end
+    elseif Game.time-self.last_shoot>self.shoot_interval then
         local temp={}
         if self.direction==0 then
             temp={
@@ -318,14 +379,10 @@ function PlayerTank:update()
         bullet:dir_to_rotate()
         bullet:dir_to_speed()
         table.insert(Game.bullets,#Game.bullets+1,bullet)
+        self.last_shoot=Game.time
+        self.flying_bullets=self.flying_bullets+1
     end
-
-    self:dir_to_rotate()
-    self.x=self.x+self.vx
-    self.y=self.y+self.vy
 end
-
-local EnemyTank=Tank:new()
 
 function EnemyTank:new(obj)
     local enemy=obj or {}
@@ -367,6 +424,10 @@ function EnemyTank:update()
         self:selectpath()
         self:dir_to_speed();self:dir_to_rotate() end
 
+    if Game.time-self.created_at>2*60 then
+        self:shoot()
+    end
+
     spr(192,self.x,self.y,6,1,0,self.rotate,2,2)
         --id x y alpha scale flip rotate w h
     self.x=self.x+self.vx
@@ -379,7 +440,15 @@ local function create_enemy()
         local temp_dir=math.random(0,3)
         local temp_x=Game.movement_patterns[temp_dir+1].x
         local temp_y=Game.movement_patterns[temp_dir+1].y
-        local enemy=EnemyTank:new({x=math.random(22*8,28*8),vx=temp_x,vy=temp_y,direction=temp_dir,possible_directions={0,0,0,0}})
+        local enemy=EnemyTank:new({
+            x=math.random(22*8,28*8),
+            vx=temp_x,
+            vy=temp_y,
+            direction=temp_dir,
+            possible_directions={0,0,0,0},
+            created_at=Game.time,
+            last_shoot=0
+        })
         enemy:dir_to_rotate()
         table.insert(Stage.enemy_container,#Stage.enemy_container+1,enemy)
     end
