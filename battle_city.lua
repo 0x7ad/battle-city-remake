@@ -338,12 +338,38 @@ function EnemyTank:update()
 
     if self:collision_ahead() then
         self.vx=0;self.vy=0
-        self.direction=math.random(0,3);self:dir_to_speed();self:dir_to_rotate() end
+        self.possible_directions[self.direction+1]=1
+
+        local h_blocked=false
+        local v_blocked=false
+        if self.possible_directions[0]==1 or self.possible_directions[1]==1 then h_blocked=true end
+        if self.possible_directions[2]==1 or self.possible_directions[3]==1 then v_blocked=true end
+
+        if v_blocked and h_blocked then
+            local fewer_possible_way={}
+            for key,dir in pairs(self.possible_directions) do
+                if dir==1 then
+                    table.insert(fewer_possible_way,#fewer_possible_way,key)
+                end
+            end
+            if #fewer_possible_way==2 then
+                local option=math(1,2)
+                self.direction=fewer_possible_way[option]
+            elseif #fewer_possible_way==1 then
+                self.direction=fewer_possible_way[1]
+            end
+        end
+
+        if self.direction==0 or self.direction==1 then
+            self.direction=math.random(2,3)
+        else self.direction=math.random(0,1) end
+        self:dir_to_speed();self:dir_to_rotate() end
 
     spr(192,self.x,self.y,6,1,0,self.rotate,2,2)
         --id x y alpha scale flip rotate w h
     self.x=self.x+self.vx
     self.y=self.y+self.vy
+    self.possible_directions={0,0,0,0}
 end
 
 local function create_enemy()
@@ -351,7 +377,7 @@ local function create_enemy()
         local temp_dir=math.random(0,3)
         local temp_x=Game.movement_patterns[temp_dir+1].x
         local temp_y=Game.movement_patterns[temp_dir+1].y
-        local enemy=EnemyTank:new({x=math.random(22*8,28*8),vx=temp_x,vy=temp_y,direction=temp_dir})
+        local enemy=EnemyTank:new({x=math.random(22*8,28*8),vx=temp_x,vy=temp_y,direction=temp_dir,possible_directions={0,0,0,0}})
         enemy:dir_to_rotate()
         table.insert(Stage.enemy_container,#Stage.enemy_container+1,enemy)
     end
