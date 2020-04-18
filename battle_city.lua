@@ -172,8 +172,9 @@ function Bullet:update(id)
 end
 
 local Tank=Movable:new({
-    id=Game.player_model,
-    lifetime=999,
+    id=0,
+    lifetime=0,
+    animation_time=2*60,
     shoot_interval_cd=1*60,
     shoot_interval=0.3*60,
     last_shoot=0,
@@ -196,11 +197,12 @@ end
 
 local PlayerTank=Tank:new({x=Game.player_generation_location_x,
                             y=Game.player_generation_location_y,
+                            id=Game.player_model,
                             moving_v=false,
                             moving_h=false,})
-function PlayerTank:timer()
-    if self.created_at==0 then 
-        self.created_at=Game.time 
+function Tank:timer()
+    if self.created_at==0 then
+        self.created_at=Game.time
     else self.lifetime=Game.time-self.created_at end
 end
 
@@ -260,53 +262,59 @@ function Movable:collision_ahead() --arrow key code
     end
 end
 
-function PlayerTank:update()
-    self:timer()
+function Tank:animate()
     -- visual effect
     if self.lifetime<=70 then --it takes 10*7 frames to finish
         spr(481+self.lifetime//10*2,self.x,self.y,0,1,0,self.rotate,2,2)
 
     elseif self.lifetime<3*60 then
-        spr(Game.player_model,self.x,self.y,6,1,0,self.rotate,2,2)
+        spr(self.id,self.x,self.y,6,1,0,self.rotate,2,2)
         spr(Game.time%2*2+289,self.x,self.y,0,1,0,self.rotate,2,2)
 
-    else spr(Game.player_model,self.x,self.y,6,1,0,self.rotate,2,2) end
+    else spr(self.id,self.x,self.y,6,1,0,self.rotate,2,2) end
     --id x y alpha scale flip rotate w h 
-
-    if (btn(1) or btn(0)) and self.moving_h==false then
-        if btnp(0) then
-            self.vy=-1
-            self.direction=0
-            self.moving_v=true
-        elseif btnp(1) then
-            self.vy=1
-            self.direction=1
-            self.moving_v=true end
-
-        if self:collision_ahead() then self.vy=0 end
-    else self.vy=0;self.moving_v=false end
-
-    if (btn(2) or btn(3)) and self.moving_v==false then
-        if btnp(2) then
-            self.vx=-1
-            self.direction=2
-            self.moving_h=true
-        elseif btnp(3) then
-            self.vx=1
-            self.direction=3
-            self.moving_h=true end
-        if self:collision_ahead() then self.vx=0 end
-    else self.vx=0;self.moving_h=false end
-
-    if btnp(4) then
-        self:shoot()
-    end
-    self:dir_to_rotate()
-    self.x=self.x+self.vx
-    self.y=self.y+self.vy
 end
 
-local EnemyTank=Tank:new()
+function PlayerTank:update()
+    self:timer()
+    self:animate()
+
+    if self.lifetime>self.animation_time then
+        if (btn(1) or btn(0)) and self.moving_h==false then
+            if btnp(0) then
+                self.vy=-1
+                self.direction=0
+                self.moving_v=true
+            elseif btnp(1) then
+                self.vy=1
+                self.direction=1
+                self.moving_v=true end
+    
+            if self:collision_ahead() then self.vy=0 end
+        else self.vy=0;self.moving_v=false end
+    
+        if (btn(2) or btn(3)) and self.moving_v==false then
+            if btnp(2) then
+                self.vx=-1
+                self.direction=2
+                self.moving_h=true
+            elseif btnp(3) then
+                self.vx=1
+                self.direction=3
+                self.moving_h=true end
+            if self:collision_ahead() then self.vx=0 end
+        else self.vx=0;self.moving_h=false end
+    
+        if btnp(4) then
+            self:shoot()
+        end
+        self:dir_to_rotate()
+        self.x=self.x+self.vx
+        self.y=self.y+self.vy
+    end
+end
+
+local EnemyTank=Tank:new({id=385})
 
 function Tank:shoot()
     if self.flying_bullets>2 then self.cd_mode=true end
@@ -418,21 +426,23 @@ function EnemyTank:selectpath()
 end
 
 function EnemyTank:update()
-    if self:collision_ahead() then
-        self.vx=0;self.vy=0
-        self.possible_directions[self.direction+1]=1
-        self:selectpath()
-        self:dir_to_speed();self:dir_to_rotate() end
+    self:timer()
+    self:animate()
+    if self.lifetime>self.animation_time then
+        if self:collision_ahead() then
+            self.vx=0;self.vy=0
+            self.possible_directions[self.direction+1]=1
+            self:selectpath()
+            self:dir_to_speed();self:dir_to_rotate() end
 
-    if Game.time-self.created_at>2*60 then
-        self:shoot()
+        if Game.time-self.created_at>2*60 then
+            self:shoot()
+        end
+
+        self.x=self.x+self.vx
+        self.y=self.y+self.vy
+        self.possible_directions={0,0,0,0}
     end
-
-    spr(192,self.x,self.y,6,1,0,self.rotate,2,2)
-        --id x y alpha scale flip rotate w h
-    self.x=self.x+self.vx
-    self.y=self.y+self.vy
-    self.possible_directions={0,0,0,0}
 end
 
 local function create_enemy()
