@@ -19,6 +19,7 @@ Game={
     enemy_number={5,10,15,20},
     current_stage=1,
     stage_count=4,
+    gameover_timestamp=0;
     ingame=false,
     stage={},
     hiscore={0,0,0,0},
@@ -48,24 +49,30 @@ Game={
             {1,{minx=2,maxx=4}}, --for the first row
             {3,{minx=2,maxx=4}}, --for the third row
         },
-    }
+    },
 }
 
 Stage={}
 
-local function stage_reset()
-    Stage={
-        player={},
-        enemy_container={},
-        player_created=false,
-        enemy_count=1,
-        finishing_timestamp=0,
-        finished=false,
-        tank_coordinates={},--1 for player
-        --do not record bullets for now
-        destruction_waitlist={},
-        destructed_tank_count=0,
+Stage={
+    player={},
+    enemy_container={},
+    player_created=false,
+    enemy_count=1,
+    finishing_timestamp=0,
+    finished=false,
+    tank_coordinates={},--1 for player
+    --do not record bullets for now
+    destruction_waitlist={},
+    destructed_tank_count=0,
 }
+
+
+function Stage:new(obj)
+    local stage=obj or {}
+    setmetatable(stage,self)
+    self.__index=self
+    return stage
 end
 
 local Movable={
@@ -242,7 +249,7 @@ function Movable:tank_ahead()
 
     local result=false
 
-    for _,tank in pairs(Stage.tank_coordinates) do
+    for _,tank in pairs(Game.stage.tank_coordinates) do
         other_x=tank[2].x
         other_y=tank[2].y
         if self.type=="player" or self.type=="enemy" then
@@ -271,11 +278,11 @@ function Movable:tank_ahead()
 
     if result==true and self.type=="bullet" then
         self.exploding=true
-        if temp_tank_id==1 and Stage.player.destructed==false then 
-            Stage.player.destruction_timestamp=Stage.player.lifetime
-            Stage.player.destructed=true
+        if temp_tank_id==1 and Game.stage.player.destructed==false then 
+            Game.stage.player.destruction_timestamp=Game.stage.player.lifetime
+            Game.stage.player.destructed=true
         end
-        for _,enemy in pairs(Stage.enemy_container) do
+        for _,enemy in pairs(Game.stage.enemy_container) do
             if temp_tank_id==enemy.tank_id and enemy.destructed==false then
                 enemy.destruction_timestamp=self.lifetime
                 enemy.destructed=true
@@ -289,14 +296,14 @@ function Movable:register_coordinate()
     local coordinates={x=self.x,y=self.y}
     if self.type=="player" then
         local tank={self.tank_id,coordinates}
-        table.remove(Stage.tank_coordinates,1)
-        table.insert(Stage.tank_coordinates,1,tank)
+        table.remove(Game.stage.tank_coordinates,1)
+        table.insert(Game.stage.tank_coordinates,1,tank)
     elseif self.type=="enemy" then
-        for i,tank in pairs(Stage.tank_coordinates) do
+        for i,tank in pairs(Game.stage.tank_coordinates) do
             if tank[1]==self.tank_id then
                 local enemy={self.tank_id,coordinates}
-                table.remove(Stage.tank_coordinates,i)
-                table.insert(Stage.tank_coordinates,i,enemy)
+                table.remove(Game.stage.tank_coordinates,i)
+                table.insert(Game.stage.tank_coordinates,i,enemy)
             end
         end
     end
@@ -640,7 +647,7 @@ function Tank:cleanup()
 end
 
 local function create_enemy()
-    if Game.time%120==0 and #Stage.enemy_container~=Stage.enemy_count then
+    if Game.time%120==0 and #Game.stage.enemy_container~=Game.stage.enemy_count then
         local temp_dir=math.random(0,3)
         local enemy=EnemyTank:new({
             y=10,
@@ -649,26 +656,13 @@ local function create_enemy()
             possible_directions={0,0,0,0},
             created_at=Game.time,
             last_shoot=0,
-            tank_id=#Stage.enemy_container==0 and 2 or #Stage.enemy_container+2,--2,1+2(3),2+2(4)
+            tank_id=#Game.stage.enemy_container==0 and 2 or #Game.stage.enemy_container+2,--2,1+2(3),2+2(4)
         })
         enemy:dir_to_rotate();enemy:dir_to_speed()
-        table.insert(Stage.enemy_container,#Stage.enemy_container+1,enemy)
+        table.insert(Game.stage.enemy_container,#Game.stage.enemy_container+1,enemy)
         local coordinate={enemy.tank_id,{x=enemy.x,y=enemy.y}}
-        table.insert(Stage.tank_coordinates,#Stage.tank_coordinates+1,coordinate)
+        table.insert(Game.stage.tank_coordinates,#Game.stage.tank_coordinates+1,coordinate)
     end
-end
-
-local function newStage(stage_number)
-    return {
-        results={0,0,0,0,0}, -- number of model 1, 2, 3, 4 and sum
-        points=0,
-        timer=0,
-        enemy_count=0,
-        enemy_container={},
-        enemy_created=0,
-        enemy_left=Game.enemy_number[stage_number],
-        enemy=Game.enemy_number[stage_number], --number of rivals for each stage
-    }
 end
 
 local function content_generator()
@@ -680,16 +674,16 @@ local function content_generator()
 end
 
 local function field_cleanup()
-    for id,tank in pairs(Stage.enemy_container) do
+    for id,tank in pairs(Game.stage.enemy_container) do
         if tank.gone then
-            table.remove(Stage.enemy_container,id)
+            table.remove(Game.stage.enemy_container,id)
         end
     end
 end
 
 local function game_status_updater()
-    if Stage.player_created then
-        if Stage.player.gone==true then Game.is_game_over=true end
+    if Game.stage.player_created then
+        if Game.stage.player.gone==true then Game.is_game_over=true end
     end
 end
 
@@ -725,38 +719,41 @@ function TIC()
             Game.map_location[Game.current_stage].y)
         game_status_updater()
         if Game.ingame==false then
-            stage_reset()
+            Game.stage=Stage:new({current_stage=Game.current_stage})
             Game.is_game_over=false
             Game.ingame=true
         end
 
-        if Stage.player_created==false then  -- once only, create player tank
-            Stage.player=PlayerTank:new()
-            local coordinate={Stage.player.tank_id,{x=Stage.player.x,y=Stage.player.y}}
-            table.insert(Stage.tank_coordinates,#Stage.tank_coordinates+1,coordinate)
-            Stage.player_created=true
+        if Game.stage.player_created==false then  -- once only, create player tank
+            Game.stage.player=PlayerTank:new()
+            local coordinate={Game.stage.player.tank_id,{x=Game.stage.player.x,y=Game.stage.player.y}}
+            table.insert(Game.stage.tank_coordinates,#Game.stage.tank_coordinates+1,coordinate)
+            Game.stage.player_created=true
         elseif Game.is_game_over==false then 
-            Stage.player:update() end --WARNING call a method using : instead of dot
+            Game.stage.player:update() end --WARNING call a method using : instead of dot
 
         for id,bullet in pairs(Game.bullets) do
             bullet:update(id)
         end
         field_cleanup()
         create_enemy()
-        for id,enemy in pairs(Stage.enemy_container) do
+        for id,enemy in pairs(Game.stage.enemy_container) do
             if enemy.destruction_timestamp==0 or (enemy.destruction_timestamp~=0 and Game.time-enemy.destruction_timestamp<Game.destruction_animation_time) then
                 enemy:update(id)
             end
         end
 
-        if (#Stage.enemy_container==0 and Game.time-Stage.finishing_timestamp>30 and Stage.finished) or Game.is_game_over then
+        if (#Game.stage.enemy_container==0 and Game.time-Game.stage.finishing_timestamp>30 and Game.stage.finished) or Game.is_game_over then
             Game.ingame=false
             print("GameOver")
-            --Game.mode=3
+            Game.mode=3
         end
 
         content_generator()
-
+    elseif Game.mode==3 then --Game Over
+        cls()
+        print("GAME OVER",18,88,15,0,2)
+        if btn(4) then Game.mode = 0 end
     elseif Game.mode==3 then --summary page
         cls()
         print("HI-SCORE")
