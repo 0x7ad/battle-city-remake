@@ -16,11 +16,10 @@ Game={
     screen_width=240,
     screen_height=136,
     player_count=0,--if there is a player
-    player=nil,
     enemy_number={5,10,15,20},
     current_stage=1,
     stage_count=4,
-    ingame=0,
+    ingame=false,
     stage={},
     hiscore={0,0,0,0},
     sprites={
@@ -52,16 +51,21 @@ Game={
     }
 }
 
-Stage={
-    enemy_container={},
-    enemy_count=1,
-    finishing_timestamp=0,
-    finished=false,
-    tank_coordinates={},--1 for player
-    --do not record bullets for now
-    destruction_waitlist={},
-    destructed_tank_count=0,
+Stage={}
+
+local function stage_reset()
+    Stage={
+        player={},
+        enemy_container={},
+        enemy_count=1,
+        finishing_timestamp=0,
+        finished=false,
+        tank_coordinates={},--1 for player
+        --do not record bullets for now
+        destruction_waitlist={},
+        destructed_tank_count=0,
 }
+end
 
 local Movable={
     x=0,
@@ -259,8 +263,11 @@ function Movable:tank_ahead()
 
     if result==true and self.type=="bullet" then
         self.exploding=true
+        if temp_tank_id==1 and Stage.player.destructed==false then 
+            Stage.player.destruction_timestamp=Stage.player.lifetime
+            Stage.player.destructed=true
+        end
         for _,enemy in pairs(Stage.enemy_container) do
-            print("temp id "..temp_tank_id,0,9)
             if temp_tank_id==enemy.tank_id and enemy.destructed==false then
                 enemy.destruction_timestamp=self.lifetime
                 enemy.destructed=true
@@ -390,7 +397,7 @@ function PlayerTank:update()
     self:timer()
     self:animate()
     self:register_coordinate()
-    if self.lifetime>self.animation_time then
+    if self.lifetime>self.animation_time and (not self.destructed) then
         local temp_dir=0
         if btnp(0) then
             temp_dir=0
@@ -429,6 +436,10 @@ function PlayerTank:update()
         if btnp(4) then
             self:shoot()
         end
+    elseif self.destructed then
+        self.vx=0
+        self.vy=0
+        self:cleanup()
     end
 end
 
@@ -581,7 +592,7 @@ function EnemyTank:update()
     end
 end
 
-function EnemyTank:cleanup()
+function Tank:cleanup()
     if self.lifetime-self.destruction_timestamp>Game.destruction_animation_time then
         self.gone=true
     end
@@ -633,6 +644,13 @@ local function field_cleanup()
             table.remove(Stage.enemy_container,id)
         end
     end
+    if Stage.player.gone==true then Game.is_game_over=true end
+end
+
+local function check_game_over()
+    if false then
+        Game.is_game_over=true
+    end
 end
 
 function TIC()
@@ -666,12 +684,18 @@ function TIC()
         map(Game.map_location[Game.current_stage].x, --static content
             Game.map_location[Game.current_stage].y)
 
+        if Game.ingame==false then
+            stage_reset()
+            Game.is_game_over=false
+            Game.ingame=true
+        end
+
         if Game.player_count==0 then  -- once only, create player tank
-            Game.player=PlayerTank:new()
-            local coordinate={Game.player.tank_id,{x=Game.player.x,y=Game.player.y}}
+            Stage.player=PlayerTank:new()
+            local coordinate={Stage.player.tank_id,{x=Stage.player.x,y=Stage.player.y}}
             table.insert(Stage.tank_coordinates,#Stage.tank_coordinates+1,coordinate)
             Game.player_count=Game.player_count+1
-        else Game.player:update() end --WARNING call a method using : instead of dot
+        else Stage.player:update() end --WARNING call a method using : instead of dot
 
         for id,bullet in pairs(Game.bullets) do
             bullet:update(id)
@@ -684,8 +708,9 @@ function TIC()
             end
         end
 
-        if #Stage.enemy_container==0 and Game.time-Stage.finishing_timestamp>30 and Stage.finished then
-            Game.mode=3
+        if (#Stage.enemy_container==0 and Game.time-Stage.finishing_timestamp>30 and Stage.finished) or Game.is_game_over then
+            Game.ingame=false
+            --Game.mode=3
         end
 
         content_generator()
