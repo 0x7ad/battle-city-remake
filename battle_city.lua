@@ -617,7 +617,7 @@ function EnemyTank:update()
     self:animate()
     self:register_coordinate()
     if self.lifetime>self.animation_time and (not self.destructed) then
-        if self:collision_ahead() or self:tank_ahead() then
+        if self:collision_ahead() then
             self.vx=0;self.vy=0
             self.possible_directions[self.direction+1]=1
             self:selectpath()
