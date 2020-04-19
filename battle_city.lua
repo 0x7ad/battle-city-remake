@@ -40,7 +40,6 @@ Game={
         {x=120,y=0},
     },
     bullets={},
-    --tank_models={257,259,261,263,},
     player_model=200,
     dynamic_content_coordinates={
         {-- for the first stage
@@ -80,7 +79,6 @@ local Movable={
     rotate=0,
     size=0,-- as w always equals h
     explosion_timestamp=0,
-    is_explosive=false,
 }
 
 function Movable:new(obj)
@@ -103,7 +101,7 @@ local function mapType(cell_x, cell_y)
     if mget(cell_x,cell_y)==33+2 then return 3 end -- bush
     if mget(cell_x,cell_y)==33+3 then return 4 end -- water
     if mget(cell_x,cell_y)==33+4 then return 5 end -- bullet
-    if mget(cell_x,cell_y)==40 then return 6 end -- eagle
+    if mget(cell_x,cell_y)==40 or mget(cell_x,cell_y)==41 or mget(cell_x,cell_y)==40+16 or mget(cell_x,cell_y)==41+16 then return 6 end -- eagle
     --if mget(cell_x,cell_y)>=170  then return 6 end -- tanks
 end
 
@@ -118,7 +116,7 @@ end
 local function isEagle(x,y)
     return mapType((x)//8,(y)//8)==6 end
 
-local function isExplodable(x,y)
+local function isBrick(x,y)
     return mapType((x)//8,(y)//8)==1 end
 
 local function stage_builder(current_stage)
@@ -139,7 +137,6 @@ end
 local Bullet=Movable:new({
     size=8,
     speed=2,
-    is_explosive=true,
     exploding=true,
     explodable_coordinates={},
     type="bullet",
@@ -248,7 +245,7 @@ function Movable:tank_ahead()
     for _,tank in pairs(Game.stage.tank_coordinates) do
         other_x=tank[2].x
         other_y=tank[2].y
-        if self.type=="player" or self.type=="enemy" then
+        if (self.type=="player" or self.type=="enemy") and self.lifetime>5*60 then
             if tank[1]~=self.tank_id then
                 if not (self.y+vy+(self.size-1)<other_y or
                     self.y+vy>other_y+(tank_size-1) or
@@ -263,12 +260,14 @@ function Movable:tank_ahead()
             local b=false
             local c=false
             local d=false
+            local e=false
             if not (self.y+vy+(self.size-1)+5<other_y) then a=true end
             if not (self.y+vy>other_y+(tank_size-1)) then b=true end
             if not (self.x+vx>other_x+(tank_size-1)) then c=true end
             if not (self.x+vx+(self.size-1)<other_x) then d=true end
+            if (temp_tank_id==1 and self.fired_by~=1) or (temp_tank_id~=1 and self.fired_by==1) then e=true end
 
-            result=temp_tank_id~=self.fired_by and a and b and c and d; if result then break end
+            result=temp_tank_id~=self.fired_by and a and b and c and d and e; if result then break end
         end
     end
 
@@ -322,43 +321,47 @@ function Movable:collision_ahead() --arrow key code
     local middle_x=0
     local middle_y=0
     if direction==0 or direction==2 then
-        --facing up, test corner_a and corner_b
         local next_x=corner_a.x+vx
         local next_y=corner_a.y+vy
-        if self.is_explosive and isExplodable(next_x,next_y) then
-            local temp={x=next_x,y=next_y}
-            self.exploding=true
-            table.insert(self.explodable_coordinates, #self.explodable_coordinates+1,temp)
-        end
+        --out of bound
         if next_x<0 or next_y<0 then return true end
-
-        if self.type=="bullet" then 
+        --bullet behaviour
+        if self.type=="bullet" then
             if isWater(next_x,next_y) then
                 result_a=false
+            elseif isBrick(next_x,next_y) then
+                result_a=true
+                local temp={x=next_x,y=next_y}
+                self.exploding=true
+                table.insert(self.explodable_coordinates, #self.explodable_coordinates+1,temp)
             elseif isSolid(next_x,next_y) and not isEagle(next_x,next_y) then
                 result_a=true
             elseif isEagle(next_x,next_y) then
                 result_a=true
                 Game.is_game_over=true end
+        -- or if it's a tank
         else result_a=isSolid(next_x,next_y) or isEagle(next_x,next_y) end
-    else
+    elseif direction==1 or direction==3 then
         local next_x=corner_d.x+vx
         local next_y=corner_d.y+vy
-        if self.is_explosive and isExplodable(next_x,next_y) then
-            local temp={x=next_x,y=next_y}
-            self.exploding=true
-            table.insert(self.explodable_coordinates, #self.explodable_coordinates+1,temp)
-        end
+        --out of bound
         if next_x>Game.screen_width or next_y>Game.screen_height then
             return true end
-        if self.type=="bullet" then 
+        -- bullets
+        if self.type=="bullet" then
             if isWater(next_x,next_y) then
                 result_a=false
+            elseif isBrick(next_x,next_y) then
+                result_a=true
+                local temp={x=next_x,y=next_y}
+                self.exploding=true
+                table.insert(self.explodable_coordinates, #self.explodable_coordinates+1,temp)
             elseif isSolid(next_x,next_y) and not isEagle(next_x,next_y) then
-                result_a=true 
+                result_a=true
             elseif isEagle(next_x,next_y) then
                 result_a=true
                 Game.is_game_over=true end
+        -- tanks
         else result_a=isSolid(next_x,next_y) or isEagle(next_x,next_y) end
     end
 
@@ -368,33 +371,31 @@ function Movable:collision_ahead() --arrow key code
         if self.type=="bullet" then 
             if isWater(next_x,next_y) then
                 result_b=false
+            elseif isBrick(next_x,next_y) then 
+                local temp={x=next_x,y=next_y}
+                self.exploding=true
+                table.insert(self.explodable_coordinates, #self.explodable_coordinates+1,temp)
             elseif isSolid(next_x,next_y) and not isEagle(next_x,next_y) then
-                result_b=true 
+                result_b=true
             elseif isEagle(next_x,next_y) then
                 result_b=true
                 Game.is_game_over=true end
         else result_b=isSolid(next_x,next_y) or isEagle(next_x,next_y) end
-        if self.is_explosive and isExplodable(next_x,next_y) then
-            local temp={x=next_x,y=next_y}
-            self.exploding=true
-            table.insert(self.explodable_coordinates, #self.explodable_coordinates+1,temp)
-        end
     else local next_x=corner_c.x+vx
         local next_y=corner_c.y+vy
         if self.type=="bullet" then 
             if isWater(next_x,next_y) then
                 result_b=false
+            elseif isBrick(next_x,next_y) then 
+                local temp={x=next_x,y=next_y}
+                self.exploding=true
+                table.insert(self.explodable_coordinates, #self.explodable_coordinates+1,temp)
             elseif isSolid(next_x,next_y) and not isEagle(next_x,next_y) then
-                result_b=true 
+                result_b=true
             elseif isEagle(next_x,next_y) then
                 result_b=true
                 Game.is_game_over=true end
         else result_b=isSolid(next_x,next_y) or isEagle(next_x,next_y) end
-        if self.is_explosive and isExplodable(next_x,next_y) then
-            local temp={x=next_x,y=next_y}
-            self.exploding=true
-            table.insert(self.explodable_coordinates, #self.explodable_coordinates+1,temp)
-        end
     end
 
     if direction==0 then
@@ -413,7 +414,7 @@ function Movable:collision_ahead() --arrow key code
         middle_x=middle_bd.x+vx
         middle_y=middle_bd.y+vy end
 
-    result_c=isSolid(middle_x,middle_y)
+    result_c=isSolid(middle_x,middle_y) and not isWater(middle_x,middle_y)
 
     return result_a or result_b or result_c
 end
@@ -643,7 +644,7 @@ function Tank:cleanup()
 end
 
 local function create_enemy()
-    if Game.time%120==0 and Game.stage.created_enemy_quantity<Game.stage.enemy_total then
+    if Game.time%180==0 and Game.stage.created_enemy_quantity<Game.stage.enemy_total then
         local temp_dir=math.random(0,3)
         local enemy=EnemyTank:new({
             y=0,
@@ -655,6 +656,7 @@ local function create_enemy()
         })
         enemy:dir_to_rotate();enemy:dir_to_speed()
         table.insert(Game.stage.enemy_container,#Game.stage.enemy_container+1,enemy)
+        Game.stage.created_enemy_quantity=Game.stage.created_enemy_quantity+1
         local coordinate={enemy.tank_id,{x=enemy.x,y=enemy.y}}
         table.insert(Game.stage.tank_coordinates,#Game.stage.tank_coordinates+1,coordinate)
     end
@@ -676,7 +678,7 @@ local function field_cleanup()
     end
 end
 
-local function game_status_updater()
+local function game_status_checker()
     if Game.stage.player_created then
         if Game.stage.player.gone==true then Game.is_game_over=true end
     end
@@ -712,13 +714,11 @@ function TIC()
         cls()
         map(Game.map_location[Game.current_stage].x, --static content
             Game.map_location[Game.current_stage].y)
-
         --if the player is gone, the game is over
-        game_status_updater()
+        game_status_checker()
         --reset game/stage whenever we enter a new stage/game
         if Game.ingame==false then
             Game.stage=Stage:new({
-                current_stage=Game.current_stage,
                 enemy_total=Game.enemy_totals[Game.current_stage]})
             Game.is_game_over=false
             Game.ingame=true
@@ -739,20 +739,19 @@ function TIC()
         field_cleanup()
         create_enemy()
         for id,enemy in pairs(Game.stage.enemy_container) do
-            if enemy.destruction_timestamp==0 or (enemy.destruction_timestamp~=0 and Game.time-enemy.destruction_timestamp<Game.destruction_animation_time) then
-                enemy:update(id)
-            end
+            enemy:update(id)
         end
-
+        --[[
         if (#Game.stage.enemy_container==0 and Game.time-Game.stage.finishing_timestamp>30) then
             Game.ingame=false
             Game.mode=4
         elseif Game.is_game_over then
             Game.ingame=false
             Game.mode=3
-        end
+        end--]]
 
         --content_generator()
+        print("eneies left: "..#Game.stage.enemy_container)
     elseif Game.mode==3 then --Game Over
         cls()
         print("GAME OVER",18,88,15,0,2)
