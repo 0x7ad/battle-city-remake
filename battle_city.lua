@@ -712,15 +712,11 @@ function TIC()
         -- start
         if btn(4) then Game.mode = 1 end
     elseif Game.mode==1 then
-        --cls(3)          -- wipe out previous map
-        --stage_builder(Game.current_stage) -- draw new map for each stage
-        --map()
+        cls(3)          -- wipe out previous map
+        stage_builder(Game.current_stage) -- draw new map for each stage
         Game.mode=2
     elseif Game.mode==2 then --game
-        cls()
-        map(Game.map_location[Game.current_stage].x, --static content
-            Game.map_location[Game.current_stage].y)
-        --if the player is gone, the game is over
+        map()
         game_status_checker()
         --reset game/stage whenever we enter a new stage/game
         if Game.ingame==false then
@@ -768,6 +764,7 @@ function TIC()
         if Game.current_stage<#Game.enemy_totals then
             print("Next Stage",18,88,15,0,2)
             print("Press X to continue",20,108,15,0,1)
+            if btn(5) then Game.current_stage=Game.current_stage+1;Game.mode=1 end
         else print("You Win!",18,88,15,0,2)
         end
     end
