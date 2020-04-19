@@ -414,7 +414,7 @@ function Movable:collision_ahead() --arrow key code
         middle_x=middle_bd.x+vx
         middle_y=middle_bd.y+vy end
 
-    result_c=isSolid(middle_x,middle_y) and not isWater(middle_x,middle_y)
+    result_c=(isSolid(middle_x,middle_y) or isBrick(middle_x,middle_y)) and (not isWater(middle_x,middle_y))
 
     return result_a or result_b or result_c
 end
@@ -644,7 +644,7 @@ function Tank:cleanup()
 end
 
 local function create_enemy()
-    if Game.time%180==0 and Game.stage.created_enemy_quantity<Game.stage.enemy_total then
+    if Game.time%180==0 and Game.stage.created_enemy_quantity<1 then--Game.stage.enemy_total
         local temp_dir=math.random(0,3)
         local enemy=EnemyTank:new({
             y=0,
@@ -674,6 +674,11 @@ local function field_cleanup()
     for id,tank in pairs(Game.stage.enemy_container) do
         if tank.gone then
             table.remove(Game.stage.enemy_container,id)
+            for coor_id,tank_coor in pairs(Game.stage.tank_coordinates) do
+                if tank.tank_id==tank_coor[1] then
+                    table.remove(Game.stage.tank_coordinates,coor_id)
+                end
+            end
         end
     end
 end
@@ -741,6 +746,7 @@ function TIC()
         for id,enemy in pairs(Game.stage.enemy_container) do
             enemy:update(id)
         end
+        print(#Game.stage.enemy_container.." enemies left")
         --[[
         if (#Game.stage.enemy_container==0 and Game.time-Game.stage.finishing_timestamp>30) then
             Game.ingame=false
@@ -751,7 +757,6 @@ function TIC()
         end--]]
 
         --content_generator()
-        print("eneies left: "..#Game.stage.enemy_container)
     elseif Game.mode==3 then --Game Over
         cls()
         print("GAME OVER",18,88,15,0,2)
