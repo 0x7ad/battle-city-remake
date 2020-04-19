@@ -10,7 +10,7 @@ Game={
     time=0,
     player_generation_location_x=10,
     player_generation_location_y=12,
-    destruction_animation_time=1*60,
+    destruction_animation_time=0.6*60,
     screen_rows=17,
     screen_columns=30,
     screen_width=240,
@@ -196,6 +196,7 @@ local Tank=Movable:new({
     size=16, --both length or width
     tank_id=0,
     destructed=false,
+    gone=false,
 })
 function Tank:new(obj)
     local tank=obj or {}
@@ -258,10 +259,11 @@ function Movable:tank_ahead()
 
     if result==true and self.type=="bullet" then
         self.exploding=true
-        for _,tank in pairs(Stage.enemy_container) do
-            if temp_tank_id==tank.id and tank.destructed==false then
-                tank.destruction_timestamp=Game.time
-                tank.destructed=true
+        for _,enemy in pairs(Stage.enemy_container) do
+            print("temp id "..temp_tank_id,0,9)
+            if temp_tank_id==enemy.tank_id and enemy.destructed==false then
+                enemy.destruction_timestamp=self.lifetime
+                enemy.destructed=true
             end
         end
     end
@@ -377,8 +379,10 @@ function Tank:animate()
     elseif not self.destructed then
         spr(self.id,self.x,self.y,6,1,0,self.rotate,2,2)
     --id x y alpha scale flip rotate w h 
+    elseif self.destructed and Game.time-self.destruction_timestamp<Game.destruction_animation_time/2 and self.destruction_timestamp~=0 then
+        spr(323,self.x,self.y,0,1,0,self.rotate,2,2)
     elseif self.destructed and Game.time-self.destruction_timestamp<Game.destruction_animation_time and self.destruction_timestamp~=0 then
-        spr(325,self.x,self.y,0,1,0,self.rotate,4,4)
+        spr(325,self.x-8,self.y-8,0,1,0,self.rotate,4,4)
     end
 end
 
@@ -556,7 +560,7 @@ function EnemyTank:update()
     self:timer()
     self:animate()
     self:register_coordinate()
-    if self.lifetime>self.animation_time then
+    if self.lifetime>self.animation_time and (not self.destructed) then
         if self:collision_ahead() or self:tank_ahead() then
             self.vx=0;self.vy=0
             self.possible_directions[self.direction+1]=1
@@ -571,6 +575,15 @@ function EnemyTank:update()
         if Game.time-self.created_at>2*60 then
             self:shoot()
         end
+    elseif self.destructed then
+        self.vx=0;self.vy=0
+        self:cleanup()
+    end
+end
+
+function EnemyTank:cleanup()
+    if self.lifetime-self.destruction_timestamp>Game.destruction_animation_time then
+        self.gone=true
     end
 end
 
@@ -611,6 +624,14 @@ local function content_generator()
             for y=row[2].minx,row[2].maxx do
                 spr(35,row[1]*8,y*8,0)
             end
+    end
+end
+
+local function field_cleanup()
+    for id,tank in pairs(Stage.enemy_container) do
+        if tank.gone then
+            table.remove(Stage.enemy_container,id)
+        end
     end
 end
 
@@ -655,7 +676,7 @@ function TIC()
         for id,bullet in pairs(Game.bullets) do
             bullet:update(id)
         end
-
+        field_cleanup()
         create_enemy()
         for id,enemy in pairs(Stage.enemy_container) do
             if enemy.destruction_timestamp==0 or (enemy.destruction_timestamp~=0 and Game.time-enemy.destruction_timestamp<Game.destruction_animation_time) then
