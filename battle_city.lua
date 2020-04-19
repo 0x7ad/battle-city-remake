@@ -128,6 +128,7 @@ local Bullet=Movable:new({
     exploding=true,
     explodable_coordinates={},
     type="bullet",
+    fired_by=0,
 })
 
 function Bullet:new(obj)
@@ -209,6 +210,7 @@ local PlayerTank=Tank:new({x=Game.player_generation_location_x,
                             control_sequence={},--to store key sequence
                             moving_v=false,
                             moving_h=false,
+                            tank_id=1,
                             type="player"})
 function Tank:timer()
     if self.created_at==0 then
@@ -219,6 +221,7 @@ end
 function Movable:tank_ahead()
     local other_x=0
     local other_y=0
+    local tank_size=16
     local direction=self.direction
     local vx=Game.movement_patterns[direction+1].x*2 -- in case two tanks run toward each other
     local vy=Game.movement_patterns[direction+1].y*2
@@ -231,34 +234,30 @@ function Movable:tank_ahead()
         other_y=tank[2].y
         if self.type=="player" or self.type=="enemy" then
             if tank[1]~=self.tank_id then
-                if self.direction==0 then--
-                    if not (self.y+vy<other_y+(self.size-1)) and not (self.y+vy+(self.size-1)<other_y) and not (self.x>other_x+(self.size-1) or self.x+(self.size-1)<other_x) then result=true;break end
-                elseif self.direction==1 then
-                    if self.y+vy+(self.size-1)>=other_y and not (self.y+vy>other_y+(self.size-1)) and not (self.x>other_x+(self.size-1) or self.x+(self.size-1)<other_x) then result=true;break end
-                elseif self.direction==2 then--
-                    if not (self.x+vx<other_x+(self.size-1)) and not (self.x+(self.size-1)+vx<other_x) and not (self.y>other_y+(self.size-1) or self.y+(self.size-1)<other_y) then result=true;break end
-                elseif self.direction==3 then
-                    if self.x+vx+(self.size-1)>=other_x and not (self.x+vx>other_x+(self.size-1)) and not (self.y>other_y+(self.size-1) or self.y+(self.size-1)<other_y) then result=true;break end
-                end
+                if not (self.y+vy+(self.size-1)<other_y or
+                    self.y+vy>other_y+(tank_size-1) or
+                    self.x+vx>other_x+(tank_size-1) or
+                    self.x+vx+(self.size-1)<other_x)
+                then result=true;break end
             end
         end
-        if self.type=="bullet" then-- i am a bullet and i am approaching a tank
+        if self.type=="bullet" then
             temp_tank_id=tank[1]
-            if self.direction==0 then--
-                if not (self.y+vy<other_y+(self.size-1)) and not (self.y+vy+(self.size-1)<other_y) and not (self.x>other_x+(self.size-1) or self.x+(self.size-1)<other_x) then result=true;break end
-            elseif self.direction==1 then
-                if self.y+vy+(self.size-1)>=other_y and not (self.y+vy>other_y+(self.size-1)) and not (self.x>other_x+(self.size-1) or self.x+(self.size-1)<other_x) then result=true;break end
-            elseif self.direction==2 then--
-                if not (self.x+vx<other_x+(self.size-1)) and not (self.x+(self.size-1)+vx<other_x) and not (self.y>other_y+(self.size-1) or self.y+(self.size-1)<other_y) then result=true;break end
-            elseif self.direction==3 then
-                if self.x+vx+(self.size-1)>=other_x and not (self.x+vx>other_x+(self.size-1)) and not (self.y>other_y+(self.size-1) or self.y+(self.size-1)<other_y) then result=true;break end
-            end
+            local a=false
+            local b=false
+            local c=false
+            local d=false
+            if not (self.y+vy+(self.size-1)+5<other_y) then a=true end
+            if not (self.y+vy>other_y+(tank_size-1)) then b=true end
+            if not (self.x+vx>other_x+(tank_size-1)) then c=true end
+            if not (self.x+vx+(self.size-1)<other_x) then d=true end
+
+            result=temp_tank_id~=self.fired_by and a and b and c and d; if result then break end
         end
     end
 
     if result==true and self.type=="bullet" then
         self.exploding=true
-        --table.insert(self.hit_tanks, #self.hit_tanks+1,temp_tank_id) --add to hit_tanks
         for _,tank in pairs(Stage.enemy_container) do
             if temp_tank_id==tank.id and tank.destructed==false then
                 tank.destruction_timestamp=Game.time
@@ -388,7 +387,6 @@ function PlayerTank:update()
     self:animate()
     self:register_coordinate()
     if self.lifetime>self.animation_time then
-
         local temp_dir=0
         if btnp(0) then
             temp_dir=0
@@ -444,25 +442,29 @@ function Tank:shoot()
                 temp={
                     x=self.x+5,
                     y=self.y,
-                    direction=self.direction
+                    direction=self.direction,
+                    fired_by=self.tank_id,
                 }
             elseif self.direction==1 then
                 temp={
                     x=self.x+3,
                     y=self.y+15,
-                    direction=self.direction
+                    direction=self.direction,
+                    fired_by=self.tank_id,
                 }
             elseif self.direction==2 then
                 temp={
                     x=self.x,
                     y=self.y+3,
-                    direction=self.direction
+                    direction=self.direction,
+                    fired_by=self.tank_id,
                 }
             elseif self.direction==3 then
                 temp={
                     x=self.x+15,
                     y=self.y+5,
-                    direction=self.direction
+                    direction=self.direction,
+                    fired_by=self.tank_id,
                 }
             end
             local bullet=Bullet:new(temp)
@@ -478,25 +480,29 @@ function Tank:shoot()
             temp={
                 x=self.x+5,
                 y=self.y,
-                direction=self.direction
+                direction=self.direction,
+                fired_by=self.tank_id,
             }
         elseif self.direction==1 then
             temp={
                 x=self.x+3,
                 y=self.y+15,
-                direction=self.direction
+                direction=self.direction,
+                fired_by=self.tank_id,
             }
         elseif self.direction==2 then
             temp={
                 x=self.x,
                 y=self.y+3,
-                direction=self.direction
+                direction=self.direction,
+                fired_by=self.tank_id,
             }
         elseif self.direction==3 then
             temp={
                 x=self.x+15,
                 y=self.y+5,
-                direction=self.direction
+                direction=self.direction,
+                fired_by=self.tank_id,
             }
         end
         local bullet=Bullet:new(temp)
@@ -504,8 +510,13 @@ function Tank:shoot()
         bullet:dir_to_speed()
         table.insert(Game.bullets,#Game.bullets+1,bullet)
         self.last_shoot=Game.time
-        --if Game.time-self.last_shoot>1*60 then self.flying_bullets=self.flying_bullets+1 end
-        self.flying_bullets=self.flying_bullets+1
+        if Game.time-self.last_shoot<1*60 and
+            not self.cd_mode and
+            self.last_shoot~=0 then
+            self.flying_bullets=0
+        else self.flying_bullets=self.flying_bullets+1 end
+        -- you are allowed to shoot once every 0.3 sec but you will enter cooldown mode after two consecutive shots
+        -- but you wont get into cooldown status if two shots are 1 sec apart
     end
 end
 
@@ -566,20 +577,16 @@ end
 local function create_enemy()
     if Game.time%120==0 and #Stage.enemy_container~=Stage.enemy_count then
         local temp_dir=math.random(0,3)
-        local temp_x=Game.movement_patterns[temp_dir+1].x
-        local temp_y=Game.movement_patterns[temp_dir+1].y
         local enemy=EnemyTank:new({
             y=10,
             x=math.random(22*8,24*8),
-            vx=temp_x,
-            vy=temp_y,
             direction=temp_dir,
             possible_directions={0,0,0,0},
             created_at=Game.time,
             last_shoot=0,
-            tank_id=#Stage.enemy_container+2,
+            tank_id=#Stage.enemy_container==0 and 2 or #Stage.enemy_container+2,--2,1+2(3),2+2(4)
         })
-        enemy:dir_to_rotate()
+        enemy:dir_to_rotate();enemy:dir_to_speed()
         table.insert(Stage.enemy_container,#Stage.enemy_container+1,enemy)
         local coordinate={enemy.tank_id,{x=enemy.x,y=enemy.y}}
         table.insert(Stage.tank_coordinates,#Stage.tank_coordinates+1,coordinate)
@@ -644,7 +651,7 @@ function TIC()
             table.insert(Stage.tank_coordinates,#Stage.tank_coordinates+1,coordinate)
             Game.player_count=Game.player_count+1
         else Game.player:update() end --WARNING call a method using : instead of dot
-        
+
         for id,bullet in pairs(Game.bullets) do
             bullet:update(id)
         end
