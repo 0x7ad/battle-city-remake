@@ -338,7 +338,7 @@ function Movable:collision_ahead() --arrow key code
                 result_a=true
             elseif isEagle(next_x,next_y) then
                 result_a=true
-                Game.is_game_over=true end
+                Game.is_game_over=true;Game.ingame=false end
         -- or if it's a tank
         else result_a=isSolid(next_x,next_y) or isEagle(next_x,next_y) end
     elseif direction==1 or direction==3 then
@@ -360,7 +360,7 @@ function Movable:collision_ahead() --arrow key code
                 result_a=true
             elseif isEagle(next_x,next_y) then
                 result_a=true
-                Game.is_game_over=true end
+                Game.is_game_over=true;Game.ingame=false end
         -- tanks
         else result_a=isSolid(next_x,next_y) or isEagle(next_x,next_y) end
     end
@@ -379,7 +379,7 @@ function Movable:collision_ahead() --arrow key code
                 result_b=true
             elseif isEagle(next_x,next_y) then
                 result_b=true
-                Game.is_game_over=true end
+                Game.is_game_over=true;Game.ingame=false end
         else result_b=isSolid(next_x,next_y) or isEagle(next_x,next_y) end
     else local next_x=corner_c.x+vx
         local next_y=corner_c.y+vy
@@ -394,7 +394,7 @@ function Movable:collision_ahead() --arrow key code
                 result_b=true
             elseif isEagle(next_x,next_y) then
                 result_b=true
-                Game.is_game_over=true end
+                Game.is_game_over=true;Game.ingame=false end
         else result_b=isSolid(next_x,next_y) or isEagle(next_x,next_y) end
     end
 
@@ -644,7 +644,7 @@ function Tank:cleanup()
 end
 
 local function create_enemy()
-    if Game.time%180==0 and Game.stage.created_enemy_quantity<1 then--Game.stage.enemy_total
+    if Game.time%180==0 and Game.stage.created_enemy_quantity<Game.stage.enemy_total then
         local temp_dir=math.random(0,3)
         local enemy=EnemyTank:new({
             y=0,
@@ -683,12 +683,13 @@ local function field_cleanup()
     end
 end
 
-local function game_status_checker()
+local function game_status_checker()--?
     if Game.stage.player_created then
-        if Game.stage.player.gone==true then Game.is_game_over=true end
+        if Game.stage.player.gone==true then Game.is_game_over=true;Game.ingame=false;Game.player={} end
+        --it's gone only after its explosion animation is finished
+        --but if the hq is attacked, the game is over immediately
     end
 end
-
 function TIC()
     if Game.mode==0 then
         cls(0)
@@ -735,7 +736,7 @@ function TIC()
             local coordinate={Game.stage.player.tank_id,{x=Game.stage.player.x,y=Game.stage.player.y}}
             table.insert(Game.stage.tank_coordinates,#Game.stage.tank_coordinates+1,coordinate)
             Game.stage.player_created=true
-        elseif Game.is_game_over==false then
+        elseif Game.is_game_over==false then--even after the player is killed, we still update its sprites for finishing animation
             Game.stage.player:update() end--update until hq or player is destructed
 
         for id,bullet in pairs(Game.bullets) do
@@ -747,30 +748,26 @@ function TIC()
             enemy:update(id)
         end
         print(#Game.stage.enemy_container.." enemies left")
-        --[[
-        if (#Game.stage.enemy_container==0 and Game.time-Game.stage.finishing_timestamp>30) then
+        if Game.stage.created_enemy_quantity==Game.stage.enemy_total and
+        #Game.stage.enemy_container==0 and
+        Game.time-Game.stage.finishing_timestamp>30 then
             Game.ingame=false
             Game.mode=4
         elseif Game.is_game_over then
             Game.ingame=false
             Game.mode=3
-        end--]]
+        end
 
         --content_generator()
     elseif Game.mode==3 then --Game Over
         cls()
         print("GAME OVER",18,88,15,0,2)
-        print("Press Z to restart",20,108,15,0,1)
-        if btn(4) then Game.mode = 0 end
+        print("Refresh to restart",20,108,15,0,1)
     elseif Game.mode==4 then --summary page
         cls()
         if Game.current_stage<#Game.enemy_totals then
             print("Next Stage",18,88,15,0,2)
-            print("Press Z to continue",20,108,15,0,1)
-            if btn(4) then
-                Game.current_stage=Game.current_stage+1
-                Game.mode=1
-            else Game.mode=0 end
+            print("Press X to continue",20,108,15,0,1)
         else print("You Win!",18,88,15,0,2)
         end
     end
