@@ -8,19 +8,17 @@
 Game={
     mode=0,
     time=0,
-    player_generation_location_x=10,
-    player_generation_location_y=12,
+    player_generation_location_x=10*8,
+    player_generation_location_y=15*8,
     destruction_animation_time=0.6*60,
     screen_rows=17,
     screen_columns=30,
     screen_width=240,
     screen_height=136,
-    player_count=0,--if there is a player
-    enemy_number={5,10,15,20},
+    enemy_totals={5,10,15},-- 3 stages for now, used when initiating a new stage
     current_stage=1,
-    stage_count=4,
     gameover_timestamp=0;
-    ingame=false,
+    ingame=false, --stage created and the player is playing
     stage={},
     hiscore={0,0,0,0},
     sprites={
@@ -50,21 +48,19 @@ Game={
             {3,{minx=2,maxx=4}}, --for the third row
         },
     },
+    is_game_over=false,
 }
-
-Stage={}
 
 Stage={
     player={},
     enemy_container={},
     player_created=false,
-    enemy_count=1,
+    enemy_total=0,
     finishing_timestamp=0,
-    finished=false,
     tank_coordinates={},--1 for player
     --do not record bullets for now
-    destruction_waitlist={},
     destructed_tank_count=0,
+    created_enemy_quantity=0,
 }
 
 
@@ -647,16 +643,15 @@ function Tank:cleanup()
 end
 
 local function create_enemy()
-    if Game.time%120==0 and #Game.stage.enemy_container~=Game.stage.enemy_count then
+    if Game.time%120==0 and Game.stage.created_enemy_quantity<Game.stage.enemy_total then
         local temp_dir=math.random(0,3)
         local enemy=EnemyTank:new({
-            y=10,
+            y=0,
             x=math.random(22*8,24*8),
             direction=temp_dir,
             possible_directions={0,0,0,0},
             created_at=Game.time,
-            last_shoot=0,
-            tank_id=#Game.stage.enemy_container==0 and 2 or #Game.stage.enemy_container+2,--2,1+2(3),2+2(4)
+            tank_id=Game.stage.created_enemy_quantity==0 and 2 or Game.stage.created_enemy_quantity+2,--2,1+2(3),2+2(4)
         })
         enemy:dir_to_rotate();enemy:dir_to_speed()
         table.insert(Game.stage.enemy_container,#Game.stage.enemy_container+1,enemy)
@@ -717,20 +712,26 @@ function TIC()
         cls()
         map(Game.map_location[Game.current_stage].x, --static content
             Game.map_location[Game.current_stage].y)
+
+        --if the player is gone, the game is over
         game_status_updater()
+        --reset game/stage whenever we enter a new stage/game
         if Game.ingame==false then
-            Game.stage=Stage:new({current_stage=Game.current_stage})
+            Game.stage=Stage:new({
+                current_stage=Game.current_stage,
+                enemy_total=Game.enemy_totals[Game.current_stage]})
             Game.is_game_over=false
             Game.ingame=true
         end
 
-        if Game.stage.player_created==false then  -- once only, create player tank
+        if Game.stage.player_created==false then
             Game.stage.player=PlayerTank:new()
+            --register initial coordinates (can be moved to register method)
             local coordinate={Game.stage.player.tank_id,{x=Game.stage.player.x,y=Game.stage.player.y}}
             table.insert(Game.stage.tank_coordinates,#Game.stage.tank_coordinates+1,coordinate)
             Game.stage.player_created=true
-        elseif Game.is_game_over==false then 
-            Game.stage.player:update() end --WARNING call a method using : instead of dot
+        elseif Game.is_game_over==false then
+            Game.stage.player:update() end--update until hq or player is destructed
 
         for id,bullet in pairs(Game.bullets) do
             bullet:update(id)
@@ -743,43 +744,31 @@ function TIC()
             end
         end
 
-        if (#Game.stage.enemy_container==0 and Game.time-Game.stage.finishing_timestamp>30 and Game.stage.finished) or Game.is_game_over then
+        if (#Game.stage.enemy_container==0 and Game.time-Game.stage.finishing_timestamp>30) then
             Game.ingame=false
-            print("GameOver")
+            Game.mode=4
+        elseif Game.is_game_over then
+            Game.ingame=false
             Game.mode=3
         end
 
-        content_generator()
+        --content_generator()
     elseif Game.mode==3 then --Game Over
         cls()
         print("GAME OVER",18,88,15,0,2)
+        print("Press Z to restart",20,108,15,0,1)
         if btn(4) then Game.mode = 0 end
-    elseif Game.mode==3 then --summary page
+    elseif Game.mode==4 then --summary page
         cls()
-        print("HI-SCORE")
-        print(Game.hiscore)
-        print("STAGE")
-        print(Game.current_stage)
-        print(Game.hiscore[Game.current_stage])
-        for i=0,3 do
-            local points = 100*(i+1)*Game.stage.results[i]
-            spr() -- tank icon
-            print(points)
-            print("PTS")
-            Game.stage.points=Game.stage.points+points
-            Game.stage.results[4]=Game.stage.results[4]+Game.stage.results[i]
+        if Game.current_stage<#Game.enemy_totals then
+            print("Next Stage",18,88,15,0,2)
+            print("Press Z to continue",20,108,15,0,1)
+            if btn(4) then
+                Game.current_stage=Game.current_stage+1
+                Game.mode=1
+            else Game.mode=0 end
+        else print("You Win!",18,88,15,0,2)
         end
-        print("TOTAL")
-        print(Game.stage.points)
-        print(Game.stage.results[4])
-
-        spr(161+0,18+20*0,108,0,1) --[
-        spr(Game.time%60//30*(161+1),18+20*1,108,0,1) --z
-        spr(161+2,18+20*2,108,0,1) --]
-        if btn(4) and Game.current_stage~=Game.stage_count then
-            --Game.current_stage=Game.current_stage+1
-            Game.mode=1
-        else Game.mode=0 end
     end
     Game.time=Game.time+1
 end
