@@ -333,7 +333,7 @@ function Movable:collision_ahead() --arrow key code
             if isWater(next_x,next_y) then
                 result_a=false
             elseif isSolid(next_x,next_y) and not isEagle(next_x,next_y) then
-                result_a=true 
+                result_a=true
             elseif isEagle(next_x,next_y) then
                 result_a=true
                 Game.is_game_over=true end
@@ -364,13 +364,13 @@ function Movable:collision_ahead() --arrow key code
         local next_y=corner_b.y+vy
         if self.type=="bullet" then 
             if isWater(next_x,next_y) then
-                result_a=false
+                result_b=false
             elseif isSolid(next_x,next_y) and not isEagle(next_x,next_y) then
-                result_a=true 
+                result_b=true 
             elseif isEagle(next_x,next_y) then
-                result_a=true
+                result_b=true
                 Game.is_game_over=true end
-        else result_a=isSolid(next_x,next_y) or isEagle(next_x,next_y) end
+        else result_b=isSolid(next_x,next_y) or isEagle(next_x,next_y) end
         if self.is_explosive and isExplodable(next_x,next_y) then
             local temp={x=next_x,y=next_y}
             self.exploding=true
@@ -380,13 +380,13 @@ function Movable:collision_ahead() --arrow key code
         local next_y=corner_c.y+vy
         if self.type=="bullet" then 
             if isWater(next_x,next_y) then
-                result_a=false
+                result_b=false
             elseif isSolid(next_x,next_y) and not isEagle(next_x,next_y) then
-                result_a=true 
+                result_b=true 
             elseif isEagle(next_x,next_y) then
-                result_a=true
+                result_b=true
                 Game.is_game_over=true end
-        else result_a=isSolid(next_x,next_y) or isEagle(next_x,next_y) end
+        else result_b=isSolid(next_x,next_y) or isEagle(next_x,next_y) end
         if self.is_explosive and isExplodable(next_x,next_y) then
             local temp={x=next_x,y=next_y}
             self.exploding=true
@@ -410,7 +410,7 @@ function Movable:collision_ahead() --arrow key code
         middle_x=middle_bd.x+vx
         middle_y=middle_bd.y+vy end
 
-    result_c=isSolid(middle_x,middle_y) and not isWater(middle_x,middle_y)
+    result_c=isSolid(middle_x,middle_y)
 
     return result_a or result_b or result_c
 end
