@@ -273,6 +273,7 @@ local PlayerTank=Tank:new({x=Game.player_generation_location_x,
                             moving_v=false,
                             moving_h=false,
                             tank_id=1,
+                            is_moving=false,
                             type="player"})
 function Tank:timer()
     if self.created_at==0 then
@@ -478,7 +479,10 @@ function Tank:animate()
         spr(Game.time%2*2+289,self.x,self.y,0,1,0,self.rotate,2,2)
 
     elseif not self.destructed then
-        spr(self.id,self.x,self.y,6,1,0,self.rotate,2,2)
+        if self.type=="player" and self.is_moving==false then 
+            spr(self.id,self.x,self.y,6,1,0,self.rotate,2,2)
+        else
+            spr(self.id+Game.time%6//3*32,self.x,self.y,6,1,0,self.rotate,2,2) end
     --id x y alpha scale flip rotate w h 
     elseif self.destructed and Game.time-self.destruction_timestamp<Game.destruction_animation_time/2 and self.destruction_timestamp~=0 then
         spr(323,self.x,self.y,0,1,0,self.rotate,2,2)
@@ -510,9 +514,11 @@ function PlayerTank:update()
         if #self.control_sequence==0 then
             self.vx=0
             self.vy=0
+            self.is_moving=false
         else
             self.direction=self.control_sequence[#self.control_sequence]
             self:dir_to_rotate()
+            self.is_moving=true
             if (not self:collision_ahead()) and (not self:tank_ahead()) then
                 self:dir_to_speed()
                 self.x=self.x+self.vx
