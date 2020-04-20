@@ -37,7 +37,6 @@ Game={
         {x=30,y=0},
         {x=60,y=0},
         {x=90,y=0},
-        {x=120,y=0},
     },
     bullets={},
     player_model=200,
@@ -685,7 +684,7 @@ end
 
 local function game_status_checker()--?
     if Game.stage.player_created then
-        if Game.stage.player.gone==true then Game.is_game_over=true;Game.ingame=false;Game.player={} end
+        if Game.stage.player.gone==true then Game.is_game_over=true end
         --it's gone only after its explosion animation is finished
         --but if the hq is attacked, the game is over immediately
     end
