@@ -15,8 +15,8 @@ Game={
     screen_columns=30,
     screen_width=240,
     screen_height=136,
-    enemy_totals={5,10,15,20},-- 3 stages for now, used when initiating a new stage
-    current_stage=4,
+    enemy_totals={5,10,8,15},-- 3 stages for now, used when initiating a new stage
+    current_stage=1,
     gameover_timestamp=0;
     ingame=false, --stage created and the player is playing
     stage={},
@@ -39,7 +39,7 @@ Game={
         {x=90,y=0},
     },
     bullets={},
-    player_model=200,
+    player_model=393,
     dynamic_content_coordinates={
         {-- for the first stage
             {4+1,{minx=0,maxx=29}},
@@ -242,8 +242,9 @@ local Tank=Movable:new({
     lifetime=0,
     destruction_timestamp=0,
     animation_time=2*60,
-    shoot_interval_cd=1*60,
-    shoot_interval=0.3*60,
+    shoot_interval_cd=2*60,
+    shoot_interval=0.7*60, --normally you are allowed to shoot every 0.7 sec but after three shots you will enter the cooldown mode
+    no_cd_interval=1*60,
     last_shoot=0,
     speed=1,
     flying_bullets=0,
@@ -473,7 +474,7 @@ function Tank:animate()
         spr(481+self.lifetime//10*2,self.x,self.y,0,1,0,self.rotate,2,2)
 
     elseif self.lifetime<3*60 then
-        spr(self.id,self.x,self.y,6,1,0,self.rotate,2,2)
+        spr(self.id,self.x,self.y,6,1,0,self.rotate,2,2)--id means models
         spr(Game.time%2*2+289,self.x,self.y,0,1,0,self.rotate,2,2)
 
     elseif not self.destructed then
@@ -536,7 +537,7 @@ function PlayerTank:update()
     end
 end
 
-local EnemyTank=Tank:new({id=385,type="enemy"})
+local EnemyTank=Tank:new({type="enemy"})
 
 function Tank:shoot()
     if self.flying_bullets>2 then self.cd_mode=true end
@@ -618,7 +619,7 @@ function Tank:shoot()
         bullet:dir_to_speed()
         table.insert(Game.bullets,#Game.bullets+1,bullet)
         self.last_shoot=Game.time
-        if Game.time-self.last_shoot<1*60 and
+        if Game.time-self.last_shoot<self.no_cd_interval and
             not self.cd_mode and
             self.last_shoot~=0 then
             self.flying_bullets=0
@@ -694,7 +695,9 @@ end
 local function create_enemy()
     if Game.time%180==0 and Game.stage.created_enemy_quantity<Game.stage.enemy_total then
         local temp_dir=math.random(0,3)
+        local enemy_model=385+(Game.time%2)*2*math.random(0,3)
         local enemy=EnemyTank:new({
+            id=enemy_model,
             y=0,
             x=math.random(22*8,24*8),
             direction=temp_dir,
