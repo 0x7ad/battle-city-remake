@@ -15,8 +15,8 @@ Game={
     screen_columns=30,
     screen_width=240,
     screen_height=136,
-    enemy_totals={5,10,15},-- 3 stages for now, used when initiating a new stage
-    current_stage=1,
+    enemy_totals={5,10,15,20},-- 3 stages for now, used when initiating a new stage
+    current_stage=4,
     gameover_timestamp=0;
     ingame=false, --stage created and the player is playing
     stage={},
@@ -42,8 +42,57 @@ Game={
     player_model=200,
     dynamic_content_coordinates={
         {-- for the first stage
-            {1,{minx=2,maxx=4}}, --for the first row
-            {3,{minx=2,maxx=4}}, --for the third row
+            {4+1,{minx=0,maxx=29}},
+            {4+2,{minx=0,maxx=29}},
+            {4+6,{minx=0,maxx=29}},
+            {4+7,{minx=0,maxx=29}},
+            {4+8,{minx=0,maxx=29}},
+            {4+3,{minx=0,maxx=2}},{4+3,{minx=7,maxx=11}},{4+3,{minx=16,maxx=19}},{4+3,{minx=24,maxx=27}},
+            {4+4,{minx=0,maxx=2}},{4+4,{minx=7,maxx=11}},{4+4,{minx=16,maxx=19}},{4+4,{minx=24,maxx=27}},
+            {4+5,{minx=0,maxx=2}},{4+5,{minx=7,maxx=11}},{4+5,{minx=16,maxx=19}},{4+5,{minx=24,maxx=27}},
+        },
+        {
+            {0,{minx=54,maxx=59}},
+            {1,{minx=54,maxx=59}},
+            {2,{minx=54,maxx=59}},
+            {3,{minx=54,maxx=55}},
+            {4,{minx=48,maxx=53}},
+            {5,{minx=48,maxx=53}},
+            {6,{minx=30,maxx=35}},{6,{minx=44,maxx=53}},
+            {7,{minx=30,maxx=33}},{7,{minx=54,maxx=57}},
+            {8,{minx=30,maxx=33}},{8,{minx=54,maxx=57}},
+            {9,{minx=32,maxx=33}},{9,{minx=40,maxx=41}},{9,{minx=52,maxx=55}},
+            {10,{minx=32,maxx=33}},{10,{minx=40,maxx=41}},{10,{minx=52,maxx=55}},
+            {11,{minx=40,maxx=41}},{11,{minx=52,maxx=53}},
+            {12,{minx=38,maxx=41}},{12,{minx=52,maxx=53}},
+            {13,{minx=30,maxx=31}},{13,{minx=34,maxx=40}},{13,{minx=52,maxx=53}},
+            {14,{minx=30,maxx=31}},{14,{minx=34,maxx=40}},{14,{minx=52,maxx=53}},
+        },
+        {
+            {3,{minx=68,maxx=69}},{3,{minx=80,maxx=81}},
+            {4,{minx=68,maxx=69}},{4,{minx=80,maxx=81}},
+            {5,{minx=68,maxx=69}},{5,{minx=80,maxx=81}},
+            {6,{minx=68,maxx=69}},{6,{minx=80,maxx=81}},
+            {9,{minx=72,maxx=73}},{9,{minx=76,maxx=77}},
+            {10,{minx=72,maxx=73}},{10,{minx=76,maxx=77}},
+            {11,{minx=72,maxx=73}},{11,{minx=76,maxx=77}},
+            {12,{minx=64,maxx=65}},{12,{minx=84,maxx=85}},
+            {13,{minx=64,maxx=65}},{13,{minx=84,maxx=85}},
+            {14,{minx=64,maxx=65}},{14,{minx=84,maxx=85}},
+            {15,{minx=64,maxx=67}},{15,{minx=82,maxx=85}},
+            {16,{minx=64,maxx=67}},{16,{minx=82,maxx=85}},
+        },
+        {
+            {2,{minx=90,maxx=92}},{2,{minx=115,maxx=118}},
+            {3,{minx=90,maxx=92}},{3,{minx=115,maxx=118}},
+            {4,{minx=103,maxx=104}},
+            {5,{minx=103,maxx=104}},
+            {6,{minx=103,maxx=104}},
+            {7,{minx=103,maxx=104}},
+            {8,{minx=91,maxx=96}},{8,{minx=103,maxx=104}},{8,{minx=111,maxx=116}},
+            {9,{minx=91,maxx=96}},{9,{minx=103,maxx=104}},{9,{minx=111,maxx=116}},
+            {10,{minx=90,maxx=90}},{10,{minx=117,maxx=118}},
+            {11,{minx=90,maxx=90}},{11,{minx=117,maxx=118}},
         },
     },
     is_game_over=false,
@@ -662,10 +711,13 @@ local function create_enemy()
 end
 
 local function content_generator()
-    for _,row in pairs(Game.dynamic_content_coordinates[Game.current_stage]) do
-            for y=row[2].minx,row[2].maxx do
-                spr(35,row[1]*8,y*8,0)
-            end
+    local offset=(Game.current_stage-1)*Game.screen_columns
+    if Game.current_stage<=#Game.dynamic_content_coordinates then
+        for _,row in pairs(Game.dynamic_content_coordinates[Game.current_stage]) do
+                for x=row[2].minx,row[2].maxx do
+                    spr(35,(x-offset)*8,row[1]*8,0)
+                end
+        end
     end
 end
 
@@ -682,7 +734,7 @@ local function field_cleanup()
     end
 end
 
-local function game_status_checker()--?
+local function game_status_checker()
     if Game.stage.player_created then
         if Game.stage.player.gone==true then Game.is_game_over=true end
         --it's gone only after its explosion animation is finished
@@ -742,7 +794,7 @@ function TIC()
         for id,enemy in pairs(Game.stage.enemy_container) do
             enemy:update(id)
         end
-        print(#Game.stage.enemy_container.." enemies left")
+        --print(#Game.stage.enemy_container.." enemies left")
         if Game.stage.created_enemy_quantity==Game.stage.enemy_total and
         #Game.stage.enemy_container==0 and
         Game.time-Game.stage.finishing_timestamp>30 then
@@ -753,7 +805,7 @@ function TIC()
             Game.mode=3
         end
 
-        --content_generator()
+        content_generator()
     elseif Game.mode==3 then --Game Over
         cls()
         print("GAME OVER",18,88,15,0,2)
