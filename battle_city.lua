@@ -1,31 +1,103 @@
 -- title:  Battle City: A Mini Remake
 -- author: Isshiki
--- desc:   A mini remake of Battle City in Lua and TIC-80
+-- desc:   A Muted Buggy Mini Remake of Battle City
 -- script: lua
--- credits: BearThorne for autopiloting and collision detection
 
--- system
+--utility functions
+local function stage_builder(current_stage)
+    local stage_coordinate=Game.map_location[current_stage]
+    local stagex=stage_coordinate.x
+    local stagey=stage_coordinate.y
+    for x=0,Game.screen_columns-1 do
+        for y=0,Game.screen_rows-1 do
+            local mirror_x=x+stagex
+            local mirror_y=y+stagey
+            local tile=mget(mirror_x,mirror_y)
+            mset(x,y,tile)
+        end
+    end
+end
+
+local function content_generator()
+    -- called after other characters have been created to make this layer above other layers
+    local offset=(Game.current_stage-1)*Game.screen_columns
+    if Game.current_stage<=#Game.dynamic_content_coordinates then
+        for _,row in pairs(Game.dynamic_content_coordinates[Game.current_stage]) do
+                for x=row[2].minx,row[2].maxx do
+                    spr(35,(x-offset)*8,row[1]*8,0) end
+        end
+    end
+end
+
+local function field_cleanup()
+    -- the enemy container table stores enemy objects
+    -- the tank coordinates table stores the coordinates of both enemies and the player for collision detection
+    for id,tank in pairs(Game.stage.enemy_container) do
+        if tank.gone then
+            table.remove(Game.stage.enemy_container,id)
+            for coor_id,tank_coor in pairs(Game.stage.tank_coordinates) do
+                if tank.tank_id==tank_coor[1] then
+                    table.remove(Game.stage.tank_coordinates,coor_id)
+                end
+            end
+        end
+    end
+end
+
+local function player_status_checker()
+    if Game.stage.player_created then
+        if Game.stage.player.gone==true then Game.is_game_over=true end
+    end
+end
+
+-- collision detection for background assets
+local function mget_helper(x,y)
+    local tile_coordinate_x=x//8
+    local tile_coordinate_y=y//8
+    return mget(tile_coordinate_x,tile_coordinate_y)
+end
+
+local function isSolid(x,y)
+    local result=mget_helper(x,y)
+    return result==Game.tile_id.brick or
+            result==Game.tile_id.iron or
+            result==Game.tile_id.water
+end
+
+local function isWater(x,y)
+    local result=mget_helper(x,y)
+    return result==Game.tile_id.water
+    --return mapType((x)//8,(y)//8)==4
+end
+
+local function isEagle(x,y)
+    local result=mget_helper(x,y)
+    return result==Game.tile_id.eagle1 or
+            result==Game.tile_id.eagle2 or
+            result==Game.tile_id.eagle4 or
+            result==Game.tile_id.eagle3
+end
+
+local function isBrick(x,y)
+    return mget_helper(x,y)==Game.tile_id.brick end
+
+-- gobal config
 Game={
     mode=0,
     time=0,
     player_generation_location_x=10*8,
     player_generation_location_y=15*8,
     destruction_animation_time=0.6*60,
-    screen_rows=17,
+    tile_id={brick=33,iron=34,bush=35,water=36,eagle1=40,eagle2=41,eagle3=40+16,eagle4=41+16},
+    sprite_id={bullet=329},
+    screen_rows=17,-- tiles
     screen_columns=30,
     screen_width=240,
     screen_height=136,
-    enemy_totals={5,10,8,15},-- 3 stages for now, used when initiating a new stage
+    enemy_totals={5,10,8,15},
     current_stage=1,
-    gameover_timestamp=0;
     ingame=false, --stage created and the player is playing
     stage={},
-    hiscore={0,0,0,0},
-    sprites={
-        player={normal=0,enchanced=0},
-        enemy={level1=0,level2=0,level3=0,level4=0},
-        effects={},
-    },
     movement_patterns={ --possible movement
         {x=0,y=-1}, --up
         {x=0,y=1},  --down
@@ -38,11 +110,10 @@ Game={
         {x=60,y=0},
         {x=90,y=0},
     },
-    bullets={},
     player_model=393,
     dynamic_content_coordinates={
         {-- for the first stage
-            {4+1,{minx=0,maxx=29}},
+            {4+1,{minx=0,maxx=29}},--{y,{minx, maxx}}
             {4+2,{minx=0,maxx=29}},
             {4+6,{minx=0,maxx=29}},
             {4+7,{minx=0,maxx=29}},
@@ -51,7 +122,7 @@ Game={
             {4+4,{minx=0,maxx=2}},{4+4,{minx=7,maxx=11}},{4+4,{minx=16,maxx=19}},{4+4,{minx=24,maxx=27}},
             {4+5,{minx=0,maxx=2}},{4+5,{minx=7,maxx=11}},{4+5,{minx=16,maxx=19}},{4+5,{minx=24,maxx=27}},
         },
-        {
+        {-- for the second stage
             {0,{minx=54,maxx=59}},
             {1,{minx=54,maxx=59}},
             {2,{minx=54,maxx=59}},
@@ -98,18 +169,18 @@ Game={
     is_game_over=false,
 }
 
+-- classes
 Stage={
     player={},
     enemy_container={},
+    bullets={},
     player_created=false,
     enemy_total=0,
     finishing_timestamp=0,
-    tank_coordinates={},--1 for player
-    --do not record bullets for now
+    tank_coordinates={},--1 reserved for player
     destructed_tank_count=0,
     created_enemy_quantity=0,
 }
-
 
 function Stage:new(obj)
     local stage=obj or {}
@@ -142,143 +213,10 @@ function Movable:dir_to_rotate()
     elseif self.direction==3 then self.rotate=1
     elseif self.direction==0 then self.rotate=0 end
 end
-local function mapType(cell_x, cell_y)
-    if mget(cell_x,cell_y)==0+0  then return 0 end -- empty
-    if mget(cell_x,cell_y)==33+0 then return 1 end -- brick
-    if mget(cell_x,cell_y)==33+1 then return 2 end -- iron
-    if mget(cell_x,cell_y)==33+2 then return 3 end -- bush
-    if mget(cell_x,cell_y)==33+3 then return 4 end -- water
-    if mget(cell_x,cell_y)==33+4 then return 5 end -- bullet
-    if mget(cell_x,cell_y)==40 or mget(cell_x,cell_y)==41 or mget(cell_x,cell_y)==40+16 or mget(cell_x,cell_y)==41+16 then return 6 end -- eagle
-    --if mget(cell_x,cell_y)>=170  then return 6 end -- tanks
-end
-
-local function isSolid(x,y)
-    return mapType((x)//8,(y)//8)~=0 and mapType((x)//8,(y)//8)~=3
-end
-
-local function isWater(x,y)
-    return mapType((x)//8,(y)//8)==4
-end
-
-local function isEagle(x,y)
-    return mapType((x)//8,(y)//8)==6 end
-
-local function isBrick(x,y)
-    return mapType((x)//8,(y)//8)==1 end
-
-local function stage_builder(current_stage)
-    local stage_coordinate=Game.map_location[current_stage]
-    local stagex=stage_coordinate.x
-    local stagey=stage_coordinate.y
-    for x=0,Game.screen_columns-1 do
-        for y=0,Game.screen_rows-1 do
-            local mirror_x=x+stagex
-            local mirror_y=y+stagey
-            local tile=mget(mirror_x,mirror_y)        
-            mset(x,y,tile) --draw the map for the current stage
-        end
-    end
-end
-
--- classes
-local Bullet=Movable:new({
-    size=8,
-    speed=2,
-    exploding=true,
-    explodable_coordinates={},
-    type="bullet",
-    fired_by=0,
-})
-
-function Bullet:new(obj)
-    local bullet=obj or {}
-    setmetatable(bullet,self)
-    self.__index=self
-    return bullet
-end
 
 function Movable:dir_to_speed()
     self.vx=Game.movement_patterns[self.direction+1].x*self.speed
     self.vy=Game.movement_patterns[self.direction+1].y*self.speed
-end
-
-function Bullet:explode()
-    -- explode an adjacent tile of the same type
-    for _,tile in pairs(self.explodable_coordinates) do
-        mset((tile.x)//8, (tile.y)//8,0)
-    end
-end
-
-function Bullet:update(id)
-    if self:collision_ahead() or self:tank_ahead() then 
-        self.vx=0
-        self.vy=0
-        if self.explosion_timestamp==0 then --move to explode
-        self.explosion_timestamp=Game.time end
-    else spr(329,self.x,self.y,0,1,0,self.rotate,1,1) end
-
-    if self.exploding==true then self:explode();self.exploding=false end
-    if self.explosion_timestamp~=0 and Game.time-self.explosion_timestamp<20 then
-        local offset1=self.size
-        local offset2=4 -- to align different sprites
-        if self.direction==1 then
-            spr(321+Game.time%20//10*2,self.x-offset1+offset2,self.y,0,1,0,self.rotate,2,2)
-        elseif self.direction==3 then
-            spr(321+Game.time%20//10*2,self.x,self.y-offset1+offset2,0,1,0,self.rotate,2,2)
-        elseif self.direction==0 then
-            spr(321+Game.time%20//10*2,self.x-offset1+offset2,self.y-offset1,0,1,0,self.rotate,2,2)
-        else
-            spr(321+Game.time%20//10*2,self.x-offset1,self.y-offset1+offset2,0,1,0,self.rotate,2,2)
-        end
-    elseif Game.time-self.explosion_timestamp>=20 and self.explosion_timestamp~=0 then
-        table.remove(Game.bullets,id) end
-    self.x=self.x+self.vx
-    self.y=self.y+self.vy
-end
-
-local Tank=Movable:new({
-    id=0,
-    lifetime=0,
-    destruction_timestamp=0,
-    animation_time=2*60,
-    shoot_interval_cd=2*60,
-    shoot_interval=0.7*60, --normally you are allowed to shoot every 0.7 sec but after three shots you will enter the cooldown mode
-    no_cd_interval=1*60,
-    last_shoot=0,
-    speed=1,
-    flying_bullets=0,
-    cd_mode=false,
-    created_at=0,
-    can_move=false,
-    direction=0, -- rotate parameter for spr
-    movement=Game.movement_patterns[math.random(1,4)],
-    -- shooting_range=10,
-    size=16, --both length or width
-    tank_id=0,
-    destructed=false,
-    gone=false,
-})
-function Tank:new(obj)
-    local tank=obj or {}
-    setmetatable(tank,self)
-    self.__index=self
-    return tank
-end
-
-local PlayerTank=Tank:new({x=Game.player_generation_location_x,
-                            y=Game.player_generation_location_y,
-                            id=Game.player_model,
-                            control_sequence={},--to store key sequence
-                            moving_v=false,
-                            moving_h=false,
-                            tank_id=1,
-                            is_moving=false,
-                            type="player"})
-function Tank:timer()
-    if self.created_at==0 then
-        self.created_at=Game.time
-    else self.lifetime=Game.time-self.created_at end
 end
 
 function Movable:tank_ahead()
@@ -322,17 +260,7 @@ function Movable:tank_ahead()
     end
 
     if result==true and self.type=="bullet" then
-        self.exploding=true
-        if temp_tank_id==1 and Game.stage.player.destructed==false then 
-            Game.stage.player.destruction_timestamp=Game.stage.player.lifetime
-            Game.stage.player.destructed=true
-        end
-        for _,enemy in pairs(Game.stage.enemy_container) do
-            if temp_tank_id==enemy.tank_id and enemy.destructed==false then
-                enemy.destruction_timestamp=self.lifetime
-                enemy.destructed=true
-            end
-        end
+        self:destruct_tank(temp_tank_id)
     end
     return result
 end
@@ -353,6 +281,7 @@ function Movable:register_coordinate()
         end
     end
 end
+
 function Movable:collision_ahead() --arrow key code
     local direction=self.direction
     local result_a=false
@@ -469,6 +398,105 @@ function Movable:collision_ahead() --arrow key code
     return result_a or result_b or result_c
 end
 
+local Bullet=Movable:new({
+    size=8,
+    speed=2,
+    exploding=true,
+    explodable_coordinates={},
+    type="bullet",
+    fired_by=0,
+})
+
+function Bullet:new(obj)
+    local bullet=obj or {}
+    setmetatable(bullet,self)
+    self.__index=self
+    return bullet
+end
+
+function Bullet:explode()
+    -- explode an adjacent tile of the same type
+    for _,tile in pairs(self.explodable_coordinates) do
+        mset((tile.x)//8, (tile.y)//8,0)
+    end
+end
+
+function Bullet:update(id)
+    if self:collision_ahead() or self:tank_ahead() then 
+        self.vx=0
+        self.vy=0
+        if self.explosion_timestamp==0 then --move to explode
+        self.explosion_timestamp=Game.time end
+    else spr(329,self.x,self.y,0,1,0,self.rotate,1,1) end
+
+    if self.exploding==true then self:explode();self.exploding=false end
+    if self.explosion_timestamp~=0 and Game.time-self.explosion_timestamp<20 then
+        local offset1=self.size
+        local offset2=4 -- to align different sprites
+        if self.direction==1 then
+            spr(321+Game.time%20//10*2,self.x-offset1+offset2,self.y,0,1,0,self.rotate,2,2)
+        elseif self.direction==3 then
+            spr(321+Game.time%20//10*2,self.x,self.y-offset1+offset2,0,1,0,self.rotate,2,2)
+        elseif self.direction==0 then
+            spr(321+Game.time%20//10*2,self.x-offset1+offset2,self.y-offset1,0,1,0,self.rotate,2,2)
+        else
+            spr(321+Game.time%20//10*2,self.x-offset1,self.y-offset1+offset2,0,1,0,self.rotate,2,2)
+        end
+    elseif Game.time-self.explosion_timestamp>=20 and self.explosion_timestamp~=0 then
+        table.remove(Game.stage.bullets,id) end
+    self.x=self.x+self.vx
+    self.y=self.y+self.vy
+end
+
+function Bullet:destruct_tank(tid)
+    self.exploding=true
+    if tid==1 and Game.stage.player.destructed==false then 
+        Game.stage.player.destruction_timestamp=Game.stage.player.lifetime
+        Game.stage.player.destructed=true
+    end
+    for _,enemy in pairs(Game.stage.enemy_container) do
+        if tid==enemy.tank_id and enemy.destructed==false then
+            enemy.destruction_timestamp=self.lifetime
+            enemy.destructed=true
+        end
+    end
+end
+
+local Tank=Movable:new({
+    id=0,
+    lifetime=0,
+    destruction_timestamp=0,
+    animation_time=2*60,
+    shoot_interval_cd=2*60,
+    shoot_interval=0.7*60, --normally you are allowed to shoot every 0.7 sec but after three shots you will enter the cooldown mode
+    no_cd_interval=1*60,
+    last_shoot=0,
+    speed=1,
+    flying_bullets=0,
+    cd_mode=false,
+    created_at=0,
+    can_move=false,
+    direction=0, -- rotate parameter for spr
+    movement=Game.movement_patterns[math.random(1,4)],
+    -- shooting_range=10,
+    size=16, --both length or width
+    tank_id=0,
+    destructed=false,
+    gone=false,
+})
+function Tank:new(obj)
+    local tank=obj or {}
+    setmetatable(tank,self)
+    self.__index=self
+    return tank
+end
+
+function Tank:timer()
+    if self.created_at==0 then
+        self.created_at=Game.time
+    else self.lifetime=Game.time-self.created_at end
+end
+
 function Tank:animate()
     -- visual effect
     if self.lifetime<=70 then --it takes 10*7 frames to finish
@@ -490,6 +518,112 @@ function Tank:animate()
         spr(325,self.x-8,self.y-8,0,1,0,self.rotate,4,4)
     end
 end
+
+function Tank:shoot()
+    if self.flying_bullets>2 then self.cd_mode=true end
+
+    if self.cd_mode then
+        if Game.time-self.last_shoot>self.shoot_interval_cd then
+            self.cd_mode=false
+
+            local temp={}
+            if self.direction==0 then
+                temp={
+                    x=self.x+5,
+                    y=self.y,
+                    direction=self.direction,
+                    fired_by=self.tank_id,
+                }
+            elseif self.direction==1 then
+                temp={
+                    x=self.x+3,
+                    y=self.y+15,
+                    direction=self.direction,
+                    fired_by=self.tank_id,
+                }
+            elseif self.direction==2 then
+                temp={
+                    x=self.x,
+                    y=self.y+3,
+                    direction=self.direction,
+                    fired_by=self.tank_id,
+                }
+            elseif self.direction==3 then
+                temp={
+                    x=self.x+15,
+                    y=self.y+5,
+                    direction=self.direction,
+                    fired_by=self.tank_id,
+                }
+            end
+            local bullet=Bullet:new(temp)
+            bullet:dir_to_rotate()
+            bullet:dir_to_speed()
+            table.insert(Game.stage.bullets,#Game.stage.bullets+1,bullet)
+            self.last_shoot=Game.time
+            self.flying_bullets=1
+        end
+    elseif Game.time-self.last_shoot>self.shoot_interval then
+        local temp={}
+        if self.direction==0 then
+            temp={
+                x=self.x+5,
+                y=self.y,
+                direction=self.direction,
+                fired_by=self.tank_id,
+            }
+        elseif self.direction==1 then
+            temp={
+                x=self.x+3,
+                y=self.y+15,
+                direction=self.direction,
+                fired_by=self.tank_id,
+            }
+        elseif self.direction==2 then
+            temp={
+                x=self.x,
+                y=self.y+3,
+                direction=self.direction,
+                fired_by=self.tank_id,
+            }
+        elseif self.direction==3 then
+            temp={
+                x=self.x+15,
+                y=self.y+5,
+                direction=self.direction,
+                fired_by=self.tank_id,
+            }
+        end
+        local bullet=Bullet:new(temp)
+        bullet:dir_to_rotate()
+        bullet:dir_to_speed()
+        table.insert(Game.stage.bullets,#Game.stage.bullets+1,bullet)
+        self.last_shoot=Game.time
+        if Game.time-self.last_shoot<self.no_cd_interval and
+            not self.cd_mode and
+            self.last_shoot~=0 then
+            self.flying_bullets=0
+        else self.flying_bullets=self.flying_bullets+1 end
+        -- you are allowed to shoot once every 0.3 sec but you will enter cooldown mode after two consecutive shots
+        -- but you wont get into cooldown status if two shots are 1 sec apart
+    end
+end
+
+function Tank:cleanup()
+    if self.lifetime-self.destruction_timestamp>Game.destruction_animation_time then
+        self.gone=true
+    end
+end
+
+local PlayerTank=Tank:new({x=Game.player_generation_location_x,
+                            y=Game.player_generation_location_y,
+                            id=Game.player_model,
+                            control_sequence={},--to store key sequence
+                            moving_v=false,
+                            moving_h=false,
+                            tank_id=1,
+                            is_moving=false,
+                            type="player"})
 
 function PlayerTank:update()
     self:timer()
@@ -544,96 +678,6 @@ function PlayerTank:update()
 end
 
 local EnemyTank=Tank:new({type="enemy"})
-
-function Tank:shoot()
-    if self.flying_bullets>2 then self.cd_mode=true end
-
-    if self.cd_mode then
-        if Game.time-self.last_shoot>self.shoot_interval_cd then
-            self.cd_mode=false
-
-            local temp={}
-            if self.direction==0 then
-                temp={
-                    x=self.x+5,
-                    y=self.y,
-                    direction=self.direction,
-                    fired_by=self.tank_id,
-                }
-            elseif self.direction==1 then
-                temp={
-                    x=self.x+3,
-                    y=self.y+15,
-                    direction=self.direction,
-                    fired_by=self.tank_id,
-                }
-            elseif self.direction==2 then
-                temp={
-                    x=self.x,
-                    y=self.y+3,
-                    direction=self.direction,
-                    fired_by=self.tank_id,
-                }
-            elseif self.direction==3 then
-                temp={
-                    x=self.x+15,
-                    y=self.y+5,
-                    direction=self.direction,
-                    fired_by=self.tank_id,
-                }
-            end
-            local bullet=Bullet:new(temp)
-            bullet:dir_to_rotate()
-            bullet:dir_to_speed()
-            table.insert(Game.bullets,#Game.bullets+1,bullet)
-            self.last_shoot=Game.time
-            self.flying_bullets=1
-        end
-    elseif Game.time-self.last_shoot>self.shoot_interval then
-        local temp={}
-        if self.direction==0 then
-            temp={
-                x=self.x+5,
-                y=self.y,
-                direction=self.direction,
-                fired_by=self.tank_id,
-            }
-        elseif self.direction==1 then
-            temp={
-                x=self.x+3,
-                y=self.y+15,
-                direction=self.direction,
-                fired_by=self.tank_id,
-            }
-        elseif self.direction==2 then
-            temp={
-                x=self.x,
-                y=self.y+3,
-                direction=self.direction,
-                fired_by=self.tank_id,
-            }
-        elseif self.direction==3 then
-            temp={
-                x=self.x+15,
-                y=self.y+5,
-                direction=self.direction,
-                fired_by=self.tank_id,
-            }
-        end
-        local bullet=Bullet:new(temp)
-        bullet:dir_to_rotate()
-        bullet:dir_to_speed()
-        table.insert(Game.bullets,#Game.bullets+1,bullet)
-        self.last_shoot=Game.time
-        if Game.time-self.last_shoot<self.no_cd_interval and
-            not self.cd_mode and
-            self.last_shoot~=0 then
-            self.flying_bullets=0
-        else self.flying_bullets=self.flying_bullets+1 end
-        -- you are allowed to shoot once every 0.3 sec but you will enter cooldown mode after two consecutive shots
-        -- but you wont get into cooldown status if two shots are 1 sec apart
-    end
-end
 
 function EnemyTank:new(obj)
     local enemy=obj or {}
@@ -692,12 +736,6 @@ function EnemyTank:update()
     end
 end
 
-function Tank:cleanup()
-    if self.lifetime-self.destruction_timestamp>Game.destruction_animation_time then
-        self.gone=true
-    end
-end
-
 local function create_enemy()
     if Game.time%180==0 and Game.stage.created_enemy_quantity<Game.stage.enemy_total then
         local temp_dir=math.random(0,3)
@@ -719,37 +757,6 @@ local function create_enemy()
     end
 end
 
-local function content_generator()
-    local offset=(Game.current_stage-1)*Game.screen_columns
-    if Game.current_stage<=#Game.dynamic_content_coordinates then
-        for _,row in pairs(Game.dynamic_content_coordinates[Game.current_stage]) do
-                for x=row[2].minx,row[2].maxx do
-                    spr(35,(x-offset)*8,row[1]*8,0)
-                end
-        end
-    end
-end
-
-local function field_cleanup()
-    for id,tank in pairs(Game.stage.enemy_container) do
-        if tank.gone then
-            table.remove(Game.stage.enemy_container,id)
-            for coor_id,tank_coor in pairs(Game.stage.tank_coordinates) do
-                if tank.tank_id==tank_coor[1] then
-                    table.remove(Game.stage.tank_coordinates,coor_id)
-                end
-            end
-        end
-    end
-end
-
-local function game_status_checker()
-    if Game.stage.player_created then
-        if Game.stage.player.gone==true then Game.is_game_over=true end
-        --it's gone only after its explosion animation is finished
-        --but if the hq is attacked, the game is over immediately
-    end
-end
 function TIC()
     if Game.mode==0 then
         cls(0)
@@ -777,7 +784,7 @@ function TIC()
         Game.mode=2
     elseif Game.mode==2 then --game
         map()
-        game_status_checker()
+        player_status_checker()
         --reset game/stage whenever we enter a new stage/game
         if Game.ingame==false then
             Game.stage=Stage:new({
@@ -795,7 +802,7 @@ function TIC()
         elseif Game.is_game_over==false then--even after the player is killed, we still update its sprites for finishing animation
             Game.stage.player:update() end--update until hq or player is destructed
 
-        for id,bullet in pairs(Game.bullets) do
+        for id,bullet in pairs(Game.stage.bullets) do
             bullet:update(id)
         end
         field_cleanup()
