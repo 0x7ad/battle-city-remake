@@ -7,7 +7,6 @@ Battle City Remake is a partial remake of the classic Battle City and is also th
 
 You can play the game for free online [Battle City Remake](https://tic.computer/play?cart=1183)
 
-Or if you are interested in how I have built my first game, check out my [blog post](https://ilovekfc.home.blog/2020/04/21/just-survived-my-first-game/)
 
 ![screenshot: stage 1](https://github.com/0x7ad/battle-city-remake/blob/master/images/stage1.png?raw=true)
 
