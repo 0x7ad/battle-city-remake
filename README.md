@@ -5,7 +5,7 @@
 Battle City Remake is a partial remake of the classic Battle City and is also the first game I have ever built using TIC-80 and Lua.
 
 
-You can play the game for free online [Battle City Remake](https://tic.computer/play?cart=1183)
+You can play the game for free online [Battle City Remake](https://tic80.com/play?cart=1183)
 
 
 ![screenshot: stage 1](https://github.com/0x7ad/battle-city-remake/blob/master/images/stage1.png?raw=true)
